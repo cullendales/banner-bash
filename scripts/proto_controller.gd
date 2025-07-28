@@ -171,6 +171,31 @@ func take_flag():
 	is_flag_holder = true
 	flag.holder = self
 	print("%s took the flag!" % name)
+
+func apply_powerup(type: String, duration: float):
+	match type:
+		"speed":
+			base_speed *= 3
+			var timer = Timer.new()
+			timer.one_shot = true
+			timer.timeout.connect(func():
+				base_speed /= 3
+				timer.queue_free()
+			)
+			add_child(timer)
+			timer.start(duration)
+		"jump":
+			jump_velocity *= 2
+			var timer = Timer.new()
+			timer.one_shot = true
+			timer.timeout.connect(func(_timer=timer):
+				jump_velocity /= 2
+				_timer.queue_free()
+			)
+			add_child(timer)
+			timer.start(duration)
+ 			
+			
 	
 func toggle_crouch():
 	if is_crouching == false:

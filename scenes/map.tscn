@@ -3,6 +3,7 @@
 [ext_resource type="Material" uid="uid://bjw2tk8edhqs5" path="res://gray.tres" id="1_0cso3"]
 [ext_resource type="PackedScene" uid="uid://tqjv7mfgiixx" path="res://scenes/flag.tscn" id="1_paxxb"]
 [ext_resource type="PackedScene" uid="uid://53dwmmceaina" path="res://scenes/hud.tscn" id="3_gldc4"]
+[ext_resource type="PackedScene" uid="uid://5wbqc3h0u10n" path="res://scenes/powerup.tscn" id="4_0cso3"]
 [ext_resource type="PackedScene" uid="uid://ceq4wg5n8cspw" path="res://scenes/Character.tscn" id="4_2klcf"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_a202f"]
@@ -260,3 +261,10 @@ visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.56616, -2.43611)
 
 [node name="HUD" parent="." instance=ExtResource("3_gldc4")]
+
+[node name="Powerup3" parent="." instance=ExtResource("4_0cso3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.69021, -1.00385, 12.8089)
+powerup_type = "jump"
+
+[node name="Powerup2" parent="." instance=ExtResource("4_0cso3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6161, -1.32752, 10.3163)
