@@ -178,10 +178,13 @@ func toggle_crouch():
 		is_crouching = true
 		can_jump = false
 		can_sprint = false
+		#can_move = false
+		#velocity.x = 0
 	elif is_crouching == true:
 		scale.y = 1
 		is_crouching = false
 		can_jump = true
 		can_sprint = true
+		#can_move = true
 	
 	
