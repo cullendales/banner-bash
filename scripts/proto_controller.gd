@@ -4,8 +4,9 @@ extends CharacterBody3D
 @export var can_move : bool = true
 @export var has_gravity : bool = true
 @export var can_jump : bool = true
-@export var can_sprint : bool = false
+@export var can_sprint : bool = true
 @export var can_freefly : bool = false
+@export var can_crouch : bool = true
 
 @export_group("Speeds")
 @export var look_speed : float = 0.002
@@ -22,12 +23,19 @@ extends CharacterBody3D
 @export var input_jump : String = "jump"
 @export var input_sprint : String = "sprint"
 @export var input_freefly : String = "freefly"
+@export var input_crouch : String = "crouch"
 
 ## PvP Flag Game Variables
 var is_flag_holder: bool = false
+var is_crouching: bool = false
 var score: float = 0.0
+var run_speed = 1
+var stamina_max = 100
+var stamina_current = stamina_max
 @onready var flag = get_parent().get_node("Flag")
 @onready var game = get_tree().get_root().get_node("Map/Game")
+@onready var anim_tree: AnimationTree = $MeshInstance3D/Player/AnimationTree
+@onready var state_playback: AnimationNodeStateMachinePlayback = anim_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback 
 
 ## Internals
 var mouse_captured : bool = false
@@ -60,6 +68,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			enable_freefly()
 		else:
 			disable_freefly()
+	if can_crouch and Input.is_action_just_pressed(input_crouch):
+		toggle_crouch()
 
 func _physics_process(delta: float) -> void:
 	if can_freefly and freeflying:
@@ -72,10 +82,12 @@ func _physics_process(delta: float) -> void:
 	if has_gravity and not is_on_floor():
 		velocity += get_gravity() * delta
 
+	var just_jumped = false
 	if can_jump and Input.is_action_just_pressed(input_jump) and is_on_floor():
 		velocity.y = jump_velocity
+		just_jumped = true
 
-	move_speed = sprint_speed if can_sprint and Input.is_action_pressed(input_sprint) else base_speed
+	#move_speed = sprint_speed if can_sprint and Input.is_action_pressed(input_sprint) else base_speed
 
 	if can_move:
 		var input_dir := Input.get_vector(input_left, input_right, input_forward, input_back)
@@ -98,6 +110,41 @@ func _physics_process(delta: float) -> void:
 		if score >= 100:
 			print("%s wins!" % name)
 			get_tree().paused = true
+			
+	var is_moving := Input.get_vector(input_left, input_right, input_forward, input_back).length() > 0.1
+	var sprinting := Input.is_action_pressed(input_sprint) and is_moving and can_sprint and stamina_current > 0 and !is_crouching
+
+	if sprinting:
+		stamina_current -= 80 * delta
+		move_speed = sprint_speed
+		if stamina_current <= 0:
+			stamina_current = 0
+			can_sprint = false
+	else:
+		move_speed = base_speed
+		stamina_current += 25 * delta
+		if stamina_current >= stamina_max:
+			stamina_current = stamina_max
+			can_sprint = true
+	var input_dir = Input.get_vector(input_left, input_right, input_forward, input_back)
+	var walking = input_dir.length() > 0 and is_on_floor()
+	var sprintingForAnimation = walking and can_sprint and Input.is_action_pressed(input_sprint)
+	var airborne  = not is_on_floor()
+
+	# decide what state we want
+	var target_state:String
+	if just_jumped or airborne:
+		target_state = "StandingJump"
+	elif sprintingForAnimation:
+		target_state = "Running"
+	elif walking:
+		target_state = "Walking"
+	else:
+		target_state = "Idle"
+	
+		# only switch if it's different from where we are now
+	if state_playback.get_current_node() != target_state:
+		state_playback.travel(target_state)
 
 func rotate_look(rot_input : Vector2):
 	look_rotation.x -= rot_input.y * look_speed
@@ -133,6 +180,7 @@ func check_input_mappings():
 	if can_jump and not InputMap.has_action(input_jump): push_error("Missing input: " + input_jump); can_jump = false
 	if can_sprint and not InputMap.has_action(input_sprint): push_error("Missing input: " + input_sprint); can_sprint = false
 	if can_freefly and not InputMap.has_action(input_freefly): push_error("Missing input: " + input_freefly); can_freefly = false
+	if can_crouch and not InputMap.has_action(input_crouch): push_error("Missing input: " + input_crouch); can_crouch = false
 
 func _on_tag_zone_body_entered(body: Node) -> void:
 	if body.has_method("is_flag_holder") and body.is_flag_holder:
@@ -145,3 +193,20 @@ func take_flag():
 	is_flag_holder = true
 	flag.holder = self
 	print("%s took the flag!" % name)
+	
+func toggle_crouch():
+	if is_crouching == false:
+		scale.y = 0.5
+		is_crouching = true
+		can_jump = false
+		can_sprint = false
+		#can_move = false
+		#velocity.x = 0
+	elif is_crouching == true:
+		scale.y = 1
+		is_crouching = false
+		can_jump = true
+		can_sprint = true
+		#can_move = true
+	
+	
