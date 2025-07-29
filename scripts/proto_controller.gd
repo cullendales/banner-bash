@@ -14,6 +14,10 @@ extends CharacterBody3D
 @export var jump_velocity : float = 4.5
 @export var sprint_speed : float = 10.0
 @export var freefly_speed : float = 25.0
+@export var standing_head_height := 1.6
+@export var crouched_head_height := 0.8
+@export var standing_collider_height := 1.8
+@export var crouched_collider_height := 1.0
 
 @export_group("Input Actions")
 @export var input_left : String = "move_left"
@@ -40,6 +44,9 @@ var mouse_captured : bool = false
 var look_rotation : Vector2
 var move_speed : float = 0.0
 var freeflying : bool = false
+var original_collider_height: float = 0.0
+var original_scale_y: float = 1.0
+
 
 @onready var head: Node3D = $Head
 @onready var collider: CollisionShape3D = $Collider
@@ -49,6 +56,10 @@ func _ready() -> void:
 	look_rotation.y = rotation.y
 	look_rotation.x = head.rotation.x
 	add_to_group("players")
+	
+	original_scale_y = scale.y
+	if collider.shape is CapsuleShape3D:
+		original_collider_height = (collider.shape as CapsuleShape3D).height
 
 	# Tagging detection
 	if has_node("TagZone"):
@@ -82,8 +93,6 @@ func _physics_process(delta: float) -> void:
 
 	if can_jump and Input.is_action_just_pressed(input_jump) and is_on_floor():
 		velocity.y = jump_velocity
-
-	#move_speed = sprint_speed if can_sprint and Input.is_action_pressed(input_sprint) else base_speed
 
 	if can_move:
 		var input_dir := Input.get_vector(input_left, input_right, input_forward, input_back)
@@ -130,8 +139,7 @@ func rotate_look(rot_input : Vector2):
 	look_rotation.y -= rot_input.x * look_speed
 	transform.basis = Basis()
 	rotate_y(look_rotation.y)
-	head.transform.basis = Basis()
-	head.rotate_x(look_rotation.x)
+	head.rotation.x = look_rotation.x
 
 func enable_freefly():
 	collider.disabled = true
@@ -194,22 +202,23 @@ func apply_powerup(type: String, duration: float):
 			)
 			add_child(timer)
 			timer.start(duration)
- 			
-			
-	
+ 				
 func toggle_crouch():
-	if is_crouching == false:
-		scale.y = 0.5
-		is_crouching = true
+	var shape := collider.shape as CapsuleShape3D
+	if shape == null:
+		return
+
+	is_crouching = !is_crouching
+
+	if is_crouching:
+		head.position.y = crouched_head_height
+		shape.height = crouched_collider_height
 		can_jump = false
 		can_sprint = false
-		#can_move = false
-		#velocity.x = 0
-	elif is_crouching == true:
-		scale.y = 1
-		is_crouching = false
+	else:
+		head.position.y = standing_head_height
+		shape.height = standing_collider_height
 		can_jump = true
 		can_sprint = true
-		#can_move = true
 	
 	
