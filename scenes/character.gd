@@ -39,6 +39,9 @@ var attack_cooldown_time: float = 0.5
 var attack_cooldown_timer: float = 0.0
 var can_attack: bool = true
 var hit_timer: float = 1.0
+var auto_heal_time: float = 5.0  
+var auto_heal_timer: float = 0.0
+var auto_heal_active: bool = false
 
 ## PvP Flag Game Variables
 var is_flag_holder: bool = false
@@ -110,6 +113,12 @@ func _physics_process(delta: float) -> void:
 		attack_cooldown_timer -= delta
 		if attack_cooldown_timer <= 0:
 			can_attack = true
+	
+	# Handle auto-heal timer
+	if current_hits > 0 and auto_heal_active:
+		auto_heal_timer -= delta
+		if auto_heal_timer <= 0:
+			auto_heal()
 	
 	if can_freefly and freeflying:
 		var input_dir := Input.get_vector(input_left, input_right, input_forward, input_back)
@@ -210,6 +219,10 @@ func take_hit(attacker_name: String = "Unknown"):
 	is_immune = true
 	immunity_timer = hit_immunity_time
 	
+	# Reset auto-heal timer when hit
+	auto_heal_timer = auto_heal_time
+	auto_heal_active = true
+	
 	print("%s was hit by %s! (%d/%d hits)" % [name, attacker_name, current_hits, max_hits])
 	
 	if current_hits >= max_hits:
@@ -222,10 +235,23 @@ func take_hit(attacker_name: String = "Unknown"):
 	
 	show_hit_effect()
 
+
+func auto_heal():
+	if current_hits > 0:
+		current_hits -= 1
+		auto_heal_active = false
+		print("%s auto-healed! (%d/%d hits)" % [name, current_hits, max_hits])
+		
+		# If still damaged, restart the timer
+		if current_hits > 0:
+			auto_heal_timer = auto_heal_time
+			auto_heal_active = true
+
 func reset_hits():
 	current_hits = 0
 	is_immune = false
 	immunity_timer = 0.0
+	auto_heal_active = false
 
 func add_knockback(attacker_name: String):
 	if not can_move:
