@@ -219,7 +219,7 @@ func take_hit(attacker_name: String = "Unknown"):
 	
 	show_hit_effect()
 
- Auto heal function, will restore one hit point after 5 seconds of not being hit
+# Auto heal function, will restore one hit point after 5 seconds of not being hit
 func auto_heal():
 	if current_hits > 0:
 		current_hits -= 1
