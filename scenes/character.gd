@@ -4,8 +4,9 @@ extends CharacterBody3D
 @export var can_move : bool = true
 @export var has_gravity : bool = true
 @export var can_jump : bool = true
-@export var can_sprint : bool = false
+@export var can_sprint : bool = true
 @export var can_freefly : bool = false
+@export var can_crouch : bool = true
 
 @export_group("Speeds")
 @export var look_speed : float = 0.002
@@ -22,21 +23,42 @@ extends CharacterBody3D
 @export var input_jump : String = "jump"
 @export var input_sprint : String = "sprint"
 @export var input_freefly : String = "freefly"
+@export var input_crouch : String = "crouch"
+@export var input_drop_flag : String = "drop_flag"
+@export var input_attack : String = "attack"
+
+## Health/Hit System
+@export var max_hits: int = 3
+var current_hits: int = 0
+var hit_immunity_time: float = 1.0 
+var immunity_timer: float = 0.0
+var is_immune: bool = false
+
+## Attack System
+var attack_cooldown_time: float = 0.5
+var attack_cooldown_timer: float = 0.0
+var can_attack: bool = true
+var hit_timer: float = 1.0
 
 ## PvP Flag Game Variables
 var is_flag_holder: bool = false
+var is_crouching: bool = false
 var score: float = 0.0
+var run_speed = 1
+var stamina_max = 100
+var stamina_current = stamina_max
+
+## Node References
 @onready var flag = get_parent().get_node("Flag")
 @onready var game = get_tree().get_root().get_node("Map/Game")
-@onready var anim_tree: AnimationTree = $MeshInstance3D/Player/AnimationTree
-@onready var state_playback: AnimationNodeStateMachinePlayback = anim_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback 
+@onready var anim_tree: AnimationTree = $MeshInstance3D/Player/AnimationTree if has_node("MeshInstance3D/Player/AnimationTree") else null
+@onready var state_playback: AnimationNodeStateMachinePlayback = anim_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback if anim_tree else null
 
 ## Internals
 var mouse_captured : bool = false
 var look_rotation : Vector2
 var move_speed : float = 0.0
 var freeflying : bool = false
-
 
 @onready var head: Node3D = $Head
 @onready var collider: CollisionShape3D = $Collider
@@ -46,7 +68,12 @@ func _ready() -> void:
 	look_rotation.y = rotation.y
 	look_rotation.x = head.rotation.x
 	add_to_group("players")
-	anim_tree.active = true
+	
+	if anim_tree:
+		anim_tree.active = true
+	
+	# Simple camera setup
+	head.position = Vector3(0, 1.7, 0)
 
 	# Tagging detection
 	if has_node("TagZone"):
@@ -64,8 +91,26 @@ func _unhandled_input(event: InputEvent) -> void:
 			enable_freefly()
 		else:
 			disable_freefly()
+	if can_crouch and Input.is_action_just_pressed(input_crouch):
+		toggle_crouch()
+	if Input.is_action_just_pressed(input_drop_flag) and is_flag_holder:
+		drop_flag()
+	if Input.is_action_just_pressed(input_attack) and can_attack:
+		perform_attack()
 
 func _physics_process(delta: float) -> void:
+	# Handle immunity timer
+	if is_immune:
+		immunity_timer -= delta
+		if immunity_timer <= 0:
+			is_immune = false
+	
+	# Handle attack cooldown
+	if not can_attack:
+		attack_cooldown_timer -= delta
+		if attack_cooldown_timer <= 0:
+			can_attack = true
+	
 	if can_freefly and freeflying:
 		var input_dir := Input.get_vector(input_left, input_right, input_forward, input_back)
 		var motion := (head.global_basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
@@ -80,10 +125,6 @@ func _physics_process(delta: float) -> void:
 	if can_jump and Input.is_action_just_pressed(input_jump) and is_on_floor():
 		velocity.y = jump_velocity
 		just_jumped = true
-	
-
-
-	move_speed = sprint_speed if can_sprint and Input.is_action_pressed(input_sprint) else base_speed
 
 	if can_move:
 		var input_dir := Input.get_vector(input_left, input_right, input_forward, input_back)
@@ -99,28 +140,24 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0
 
 	move_and_slide()
-	
-	
-	var input_dir = Input.get_vector(input_left, input_right, input_forward, input_back)
-	var walking = input_dir.length() > 0 and is_on_floor()
-	var sprinting = walking and can_sprint and Input.is_action_pressed(input_sprint)
-	var airborne  = not is_on_floor()
 
-	# decide what state we want
-	var target_state:String
-	if just_jumped or airborne:
-		target_state = "StandingJump"
-	elif sprinting:
-		target_state = "Running"
-	elif walking:
-		target_state = "Walking"
+	# Stamina and movement speed system
+	var is_moving := Input.get_vector(input_left, input_right, input_forward, input_back).length() > 0.1
+	var sprinting := Input.is_action_pressed(input_sprint) and is_moving and can_sprint and stamina_current > 0 and !is_crouching
+
+	if sprinting:
+		stamina_current -= 80 * delta
+		move_speed = sprint_speed
+		if stamina_current <= 0:
+			stamina_current = 0
+			can_sprint = false
 	else:
-		target_state = "Idle"
+		move_speed = base_speed
+		stamina_current += 25 * delta
+		if stamina_current >= stamina_max:
+			stamina_current = stamina_max
+			can_sprint = true
 
-	# only switch if it's different from where we are now
-	if state_playback.get_current_node() != target_state:
-		state_playback.travel(target_state)
-	
 
 	# Gain points if holding the flag
 	if is_flag_holder:
@@ -129,14 +166,100 @@ func _physics_process(delta: float) -> void:
 			print("%s wins!" % name)
 			get_tree().paused = true
 
+func perform_attack():
+	if not can_attack:
+		return
+		
+	print("%s is attacking!" % name)
+	can_attack = false
+	attack_cooldown_timer = attack_cooldown_time
+	
+	# Simple attack animation to show hitting
+	var tween = create_tween()
+	tween.tween_property(self, "scale", Vector3(1.2, 1.2, 1.2), 0.1)
+	tween.tween_property(self, "scale", Vector3(1.0, 1.0, 1.0), 0.1)
+	
+	# Create attack area
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsShapeQueryParameters3D.new()
+	
+	var attack_shape = SphereShape3D.new()
+	attack_shape.radius = 2.0
+	query.shape = attack_shape
+	
+	var attack_position = global_transform
+	attack_position.origin += transform.basis.z * -1.5
+	query.transform = attack_position
+	query.collision_mask = 1
+	
+	var results = space_state.intersect_shape(query)
+	
+	for result in results:
+		var body = result.collider
+		if body != self and body.has_method("take_hit") and body.is_in_group("players"):
+			body.take_hit(name)	
+
+			print("⚔️ %s attacked %s!" % [name, body.name])
+			break
+
+func take_hit(attacker_name: String = "Unknown"):
+	if is_immune:
+		return
+	
+	current_hits += 1
+	is_immune = true
+	immunity_timer = hit_immunity_time
+	
+	print("%s was hit by %s! (%d/%d hits)" % [name, attacker_name, current_hits, max_hits])
+	
+	if current_hits >= max_hits:
+		if is_flag_holder:
+			print("%s took too many hits and dropped the flag!" % name)
+			drop_flag()
+		
+		reset_hits()
+		add_knockback(attacker_name)
+	
+	show_hit_effect()
+
+func reset_hits():
+	current_hits = 0
+	is_immune = false
+	immunity_timer = 0.0
+
+func add_knockback(attacker_name: String):
+	if not can_move:
+		print("Character can't move - no knockback applied")
+		return
+		
+	var knockback_force = 15.0
+	var knockback_direction = Vector3.ZERO
+	
+	var attacker = get_tree().get_nodes_in_group("players").filter(func(p): return p.name == attacker_name)
+	if attacker.size() > 0:
+		knockback_direction = (global_position - attacker[0].global_position).normalized()
+	else:
+		knockback_direction = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized()
+	
+	velocity += knockback_direction * knockback_force
+	
+	var original_can_move = can_move
+	can_move = false
+	await get_tree().create_timer(0.5).timeout
+	can_move = original_can_move
+
+func show_hit_effect():
+	print("Hit! %d/%d" % [current_hits, max_hits])
+
 func rotate_look(rot_input : Vector2):
 	look_rotation.x -= rot_input.y * look_speed
 	look_rotation.x = clamp(look_rotation.x, deg_to_rad(-85), deg_to_rad(85))
 	look_rotation.y -= rot_input.x * look_speed
-	transform.basis = Basis()
-	rotate_y(look_rotation.y)
-	head.transform.basis = Basis()
-	head.rotate_x(look_rotation.x)
+	
+	rotation.y = look_rotation.y
+	head.rotation.x = look_rotation.x
+	head.rotation.y = 0
+	head.rotation.z = 0
 
 func enable_freefly():
 	collider.disabled = true
@@ -155,14 +278,17 @@ func release_mouse():
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	mouse_captured = false
 
-func check_input_mappings():
-	if can_move and not InputMap.has_action(input_left): push_error("Missing input: " + input_left); can_move = false
-	if can_move and not InputMap.has_action(input_right): push_error("Missing input: " + input_right); can_move = false
-	if can_move and not InputMap.has_action(input_forward): push_error("Missing input: " + input_forward); can_move = false
-	if can_move and not InputMap.has_action(input_back): push_error("Missing input: " + input_back); can_move = false
-	if can_jump and not InputMap.has_action(input_jump): push_error("Missing input: " + input_jump); can_jump = false
-	if can_sprint and not InputMap.has_action(input_sprint): push_error("Missing input: " + input_sprint); can_sprint = false
-	if can_freefly and not InputMap.has_action(input_freefly): push_error("Missing input: " + input_freefly); can_freefly = false
+func toggle_crouch():
+	if is_crouching == false:
+		scale.y = 0.5
+		is_crouching = true
+		can_jump = false
+		can_sprint = false
+	elif is_crouching == true:
+		scale.y = 1
+		is_crouching = false
+		can_jump = true
+		can_sprint = true
 
 func _on_tag_zone_body_entered(body: Node) -> void:
 	if body.has_method("is_flag_holder") and body.is_flag_holder:
@@ -174,4 +300,59 @@ func _on_tag_zone_body_entered(body: Node) -> void:
 func take_flag():
 	is_flag_holder = true
 	flag.holder = self
+	reset_hits()
 	print("%s took the flag!" % name)
+
+func drop_flag():
+	if not is_flag_holder:
+		return
+		
+	is_flag_holder = false
+	
+	var drop_position = global_position + transform.basis.z * -2.0
+	drop_position.y = global_position.y + 0.5
+	
+	flag.drop_at_position(drop_position)
+	
+	print("%s dropped the flag!" % name)
+
+func force_drop_flag():
+	if is_flag_holder:
+		drop_flag()
+
+func apply_powerup(type: String, duration: float):
+	match type:
+		"speed":
+			base_speed *= 3
+			var timer = Timer.new()
+			timer.one_shot = true
+			timer.timeout.connect(func():
+				base_speed /= 3
+				timer.queue_free()
+			)
+			add_child(timer)
+			timer.start(duration)
+			print("%s picked up speed boost!" % name)
+		"jump":
+			jump_velocity *= 2
+			var timer = Timer.new()
+			timer.one_shot = true
+			timer.timeout.connect(func(_timer=timer):
+				jump_velocity /= 2
+				_timer.queue_free()
+			)
+			add_child(timer)
+			timer.start(duration)
+			print("%s picked up jump boost!" % name)
+
+func check_input_mappings():
+	if can_move and not InputMap.has_action(input_left): push_error("Missing input: " + input_left); can_move = false
+	if can_move and not InputMap.has_action(input_right): push_error("Missing input: " + input_right); can_move = false
+	if can_move and not InputMap.has_action(input_forward): push_error("Missing input: " + input_forward); can_move = false
+	if can_move and not InputMap.has_action(input_back): push_error("Missing input: " + input_back); can_move = false
+	if can_jump and not InputMap.has_action(input_jump): push_error("Missing input: " + input_jump); can_jump = false
+	if can_sprint and not InputMap.has_action(input_sprint): push_error("Missing input: " + input_sprint); can_sprint = false
+	if can_freefly and not InputMap.has_action(input_freefly): push_error("Missing input: " + input_freefly); can_freefly = false
+	if can_crouch and not InputMap.has_action(input_crouch): push_error("Missing input: " + input_crouch); can_crouch = false
+	if not InputMap.has_action(input_drop_flag): push_error("Missing input: " + input_drop_flag)
+	if not InputMap.has_action(input_attack): push_error("Missing input: " + input_attack)
