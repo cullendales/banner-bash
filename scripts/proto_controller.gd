@@ -38,6 +38,8 @@ var stamina_max = 100
 var stamina_current = stamina_max
 @onready var flag = get_parent().get_node("Flag")
 @onready var game = get_tree().get_root().get_node("Map/Game")
+@onready var anim_tree: AnimationTree = $MeshInstance3D/Player/AnimationTree
+@onready var state_playback: AnimationNodeStateMachinePlayback = anim_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback 
 
 ## Internals
 var mouse_captured : bool = false
@@ -91,8 +93,11 @@ func _physics_process(delta: float) -> void:
 	if has_gravity and not is_on_floor():
 		velocity += get_gravity() * delta
 
+	var just_jumped = false
 	if can_jump and Input.is_action_just_pressed(input_jump) and is_on_floor():
 		velocity.y = jump_velocity
+		just_jumped = true
+
 
 	if can_move:
 		var input_dir := Input.get_vector(input_left, input_right, input_forward, input_back)
@@ -131,7 +136,26 @@ func _physics_process(delta: float) -> void:
 		if stamina_current >= stamina_max:
 			stamina_current = stamina_max
 			can_sprint = true
+
+	var input_dir = Input.get_vector(input_left, input_right, input_forward, input_back)
+	var walking = input_dir.length() > 0 and is_on_floor()
+	var sprintingForAnimation = walking and can_sprint and Input.is_action_pressed(input_sprint)
+	var airborne  = not is_on_floor()
+
+	# decide what state we want
+	var target_state:String
+	if just_jumped or airborne:
+		target_state = "StandingJump"
+	elif sprintingForAnimation:
+		target_state = "Running"
+	elif walking:
+		target_state = "Walking"
+	else:
+		target_state = "Idle"
 	
+		# only switch if it's different from where we are now
+	if state_playback.get_current_node() != target_state:
+		state_playback.travel(target_state)
 
 func rotate_look(rot_input : Vector2):
 	look_rotation.x -= rot_input.y * look_speed
@@ -168,6 +192,7 @@ func check_input_mappings():
 	if can_freefly and not InputMap.has_action(input_freefly): push_error("Missing input: " + input_freefly); can_freefly = false
 	if can_crouch and not InputMap.has_action(input_crouch): push_error("Missing input: " + input_crouch); can_crouch = false
 
+
 func _on_tag_zone_body_entered(body: Node) -> void:
 	if body.has_method("is_flag_holder") and body.is_flag_holder:
 		body.is_flag_holder = false
@@ -179,6 +204,7 @@ func take_flag():
 	is_flag_holder = true
 	flag.holder = self
 	print("%s took the flag!" % name)
+	
 
 func apply_powerup(type: String, duration: float):
 	match type:
@@ -220,5 +246,7 @@ func toggle_crouch():
 		shape.height = standing_collider_height
 		can_jump = true
 		can_sprint = true
+
+		
 	
 	
