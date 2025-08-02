@@ -1,0 +1,14 @@
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/servercode.GeneratedMSBuildEditorConfig.editorconfig
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/servercode.AssemblyInfoInputs.cache
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/servercode.AssemblyInfo.cs
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/servercode.csproj.CoreCompileInputs.cache
+/Users/cullendales/Desktop/servercode/bin/Debug/net9.0/servercode
+/Users/cullendales/Desktop/servercode/bin/Debug/net9.0/servercode.deps.json
+/Users/cullendales/Desktop/servercode/bin/Debug/net9.0/servercode.runtimeconfig.json
+/Users/cullendales/Desktop/servercode/bin/Debug/net9.0/servercode.dll
+/Users/cullendales/Desktop/servercode/bin/Debug/net9.0/servercode.pdb
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/servercode.dll
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/refint/servercode.dll
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/servercode.pdb
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/servercode.genruntimeconfig.cache
+/Users/cullendales/Desktop/servercode/obj/Debug/net9.0/ref/servercode.dll
