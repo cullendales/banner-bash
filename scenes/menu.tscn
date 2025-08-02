@@ -1,0 +1,41 @@
+[gd_scene load_steps=3 format=3 uid="uid://bmaoqo8781hod"]
+
+[ext_resource type="Script" uid="uid://b31fgopls8el8" path="res://scenes/menu.gd" id="1_yqeox"]
+
+[sub_resource type="CanvasTexture" id="CanvasTexture_4h3mk"]
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_yqeox")
+
+[node name="Button" type="Button" parent="."]
+layout_mode = 0
+offset_left = 546.0
+offset_top = 104.0
+offset_right = 756.0
+offset_bottom = 280.0
+text = "Host"
+icon = SubResource("CanvasTexture_4h3mk")
+
+[node name="Button2" type="Button" parent="."]
+layout_mode = 0
+offset_left = 548.0
+offset_top = 356.0
+offset_right = 758.0
+offset_bottom = 532.0
+text = "Join"
+icon = SubResource("CanvasTexture_4h3mk")
+
+[node name="IP" type="LineEdit" parent="."]
+layout_mode = 0
+offset_left = 508.0
+offset_top = 297.0
+offset_right = 805.0
+offset_bottom = 334.0
+placeholder_text = "IP"
+
+[connection signal="pressed" from="Button" to="." method="_on_HostButton_pressed"]
+[connection signal="pressed" from="Button2" to="." method="_on_JoinButton_pressed"]

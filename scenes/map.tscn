@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://bghjiufqgdsme"]
+[gd_scene load_steps=12 format=3 uid="uid://bghjiufqgdsme"]
 
 [ext_resource type="Material" uid="uid://bjw2tk8edhqs5" path="res://gray.tres" id="1_0cso3"]
 [ext_resource type="Script" uid="uid://cua7f2b4744ti" path="res://scenes/map.gd" id="1_2lpho"]
@@ -6,7 +6,8 @@
 [ext_resource type="PackedScene" uid="uid://53dwmmceaina" path="res://scenes/hud.tscn" id="3_gldc4"]
 [ext_resource type="PackedScene" uid="uid://5wbqc3h0u10n" path="res://scenes/powerup.tscn" id="4_0cso3"]
 [ext_resource type="PackedScene" uid="uid://ceq4wg5n8cspw" path="res://scenes/Character.tscn" id="4_2klcf"]
-[ext_resource type="Script" uid="uid://83e8tppecqd" path="res://scenes/server.gd" id="6_2lpho"]
+[ext_resource type="Script" uid="uid://83e8tppecqd" path="res://scripts/server.gd" id="6_2lpho"]
+[ext_resource type="Script" uid="uid://dyky0qaemu603" path="res://scenes/game_manager.gd" id="8_jh32y"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_a202f"]
 sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
@@ -259,7 +260,6 @@ material = ExtResource("1_0cso3")
 
 [node name="Flag" parent="Game" instance=ExtResource("1_paxxb")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 0, 0)
-visible = false
 
 [node name="Player 1" parent="Game" instance=ExtResource("4_2klcf")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, -1.3, 3.82549)
@@ -288,5 +288,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.621933, 1.64298, -7.42617)
 
 [node name="Server" type="Node3D" parent="."]
 script = ExtResource("6_2lpho")
+
+[node name="GameManager" type="Node3D" parent="."]
+script = ExtResource("8_jh32y")
 
 [editable path="HUD"]

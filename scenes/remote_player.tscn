@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3 uid="uid://deyvswga11fk7"]
+
+[ext_resource type="Script" uid="uid://bqkaga5yqf4o7" path="res://scenes/remote_player.gd" id="1_n407u"]
+[ext_resource type="PackedScene" uid="uid://b61isbvwf0ijp" path="res://scenes/playerModel.tscn" id="2_bbtsb"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_3i3nt"]
+size = Vector3(0.500732, 1.56079, 0.536392)
+
+[node name="CharacterBody3D" type="CharacterBody3D"]
+script = ExtResource("1_n407u")
+
+[node name="Collider" type="CollisionShape3D" parent="."]
+transform = Transform3D(-1, 0.0003777, -0.000864292, 0.000378572, 0.999999, -0.00100547, 0.00086391, -0.0010058, -0.999999, -0.00547213, 0.812569, 0.193239)
+shape = SubResource("BoxShape3D_3i3nt")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+
+[node name="Player" parent="MeshInstance3D" instance=ExtResource("2_bbtsb")]
+transform = Transform3D(-1, 0.0003777, -0.000864292, 0.000378572, 0.999999, -0.00100547, 0.00086391, -0.0010058, -0.999999, 0.00712183, 0.00014478, 0.290625)
+
+[node name="Head" type="Node3D" parent="."]

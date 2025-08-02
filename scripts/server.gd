@@ -16,7 +16,7 @@ func _ready():
 	else:
 		print("Server failed to load")
 	
-func _process(delta):
+#func _process(delta):
 	#to do
 	
 	

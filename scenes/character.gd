@@ -52,7 +52,7 @@ var stamina_max = 100
 var stamina_current = stamina_max
 
 ## Node References
-@onready var flag = get_parent().get_node("Flag")
+@onready var flag : Node = get_tree().get_current_scene().get_node_or_null("Game/Flag")
 @onready var game = get_tree().get_root().get_node("Map/Game")
 @onready var anim_tree: AnimationTree = $MeshInstance3D/Player/AnimationTree
 @onready var state_playback: AnimationNodeStateMachinePlayback = anim_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback 
@@ -185,6 +185,16 @@ func _physics_process(delta: float) -> void:
 		if score >= 100:
 			print("%s wins!" % name)
 			get_tree().paused = true
+	
+	if !Networking.is_server and Networking.my_id != -1:
+		Networking.local_state = {
+			"pos":  global_position,
+			"rot": [ $Head.rotation.x, rotation.y ],
+			"vel":  velocity,
+			"is_crouch": is_crouching,
+			"is_sprint": can_sprint and Input.is_action_pressed("sprint")
+		}
+
 
 func perform_attack():
 	if not can_attack:
@@ -386,3 +396,7 @@ func check_input_mappings():
 	if can_crouch and not InputMap.has_action(input_crouch): push_error("Missing input: " + input_crouch); can_crouch = false
 	if not InputMap.has_action(input_drop_flag): push_error("Missing input: " + input_drop_flag)
 	if not InputMap.has_action(input_attack): push_error("Missing input: " + input_attack)
+	
+
+	
+	
