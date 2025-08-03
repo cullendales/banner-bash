@@ -37,11 +37,11 @@ func _physics_process(delta: float) -> void:
 	
 	# Apply gravity
 	if has_gravity and not is_on_floor():
-		velocity += get_gravity() * delta
+		velocity += get_custom_gravity() * delta
 	
 	move_and_slide()
 
-func get_gravity() -> Vector3:
+func get_custom_gravity() -> Vector3:
 	return Vector3(0, -9.8, 0)
 
 # Network state synchronization method

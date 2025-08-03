@@ -12,13 +12,13 @@ func _ready():
 	if _client == null:
 		push_error("Client node not found! Make sure Client.cs is added to the scene tree.")
 
-func is_connected() -> bool:
+func is_server_connected() -> bool:
 	if _client == null:
 		return false
 	return _client.IsServerConnected
 
 func send_data(data: PackedByteArray) -> void:
-	if _client != null and is_connected():
+	if _client != null and is_server_connected():
 		_client.SendData(data)
 
 func connect_to_server(ip: String, port: int) -> void:
@@ -29,6 +29,6 @@ func disconnect_from_server() -> void:
 	if _client != null:
 		_client.DisconnectFromServer()
 
-# Static access method
-static func get_instance() -> Node:
+# Instance access method (not static)
+func get_instance() -> Node:
 	return get_node_or_null("/root/Client") 
