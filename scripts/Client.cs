@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.IO;
 using System.Net.Sockets;
 
 public partial class Client : Node          // ← must inherit Node
