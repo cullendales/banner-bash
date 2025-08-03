@@ -6,7 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://53dwmmceaina" path="res://scenes/hud.tscn" id="3_gldc4"]
 [ext_resource type="PackedScene" uid="uid://5wbqc3h0u10n" path="res://scenes/powerup.tscn" id="4_0cso3"]
 [ext_resource type="PackedScene" uid="uid://ceq4wg5n8cspw" path="res://scenes/Character.tscn" id="4_2klcf"]
-[ext_resource type="Script" uid="uid://83e8tppecqd" path="res://scenes/server.gd" id="6_2lpho"]
+[ext_resource type="Script" uid="uid://bvcf5jo6ko3l0" path="res://scripts/NetworkManager.cs" id="7_nakos"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_a202f"]
 sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
@@ -287,6 +287,6 @@ powerup_type = "jump"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.621933, 1.64298, -7.42617)
 
 [node name="Server" type="Node3D" parent="."]
-script = ExtResource("6_2lpho")
+script = ExtResource("7_nakos")
 
 [editable path="HUD"]
