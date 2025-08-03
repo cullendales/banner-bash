@@ -10,8 +10,9 @@ namespace GameServer
 		public static int MaxPlayers { get; private set; }
 		public static int Port { get; private set; }
 		public static Dictionary<int, Client> clients = new Dictionary<int, Client>();
+		public static int ConnectedPlayers { get; set; } = 0;
 
-		private static TcpListener tcpListener;
+		private static TcpListener? tcpListener;
 
 		public static void Start(int _maxPlayer, int _port)
 		{
@@ -30,6 +31,8 @@ namespace GameServer
 
 		private static void TCPConnectCallback(IAsyncResult _result)
 		{
+			if (tcpListener == null) return;
+			
 			TcpClient _client = tcpListener.EndAcceptTcpClient(_result);
 			tcpListener.BeginAcceptTcpClient(new AsyncCallback(TCPConnectCallback), null);
 			Console.WriteLine($"Player connecting from {_client.Client.RemoteEndPoint}");

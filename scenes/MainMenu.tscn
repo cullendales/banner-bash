@@ -32,3 +32,13 @@ offset_top = 213.0
 offset_right = 436.0
 offset_bottom = 244.0
 placeholder_text = "Port"
+
+[node name="StatusLabel" type="Label" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+
+[node name="ConnectionUI" type="Label" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0

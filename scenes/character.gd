@@ -139,6 +139,18 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0
 
 	move_and_slide()
+	
+	# Send network updates
+	var client = get_node_or_null("/root/Client")
+	if client and client.IsServerConnected:
+		# Send position updates (every few frames to avoid spam)
+		if Engine.get_process_frames() % 10 == 0:
+			send_position_packet(global_position, rotation)
+		
+		# Send state updates (less frequently)
+		if Engine.get_process_frames() % 30 == 0:
+			var current_animation = state_playback.get_current_node() if state_playback else "Idle"
+			send_state_packet(current_hits, is_flag_holder, score, stamina_current, current_animation)
 			
 	# Stamina and movement speed system
 	var is_moving := Input.get_vector(input_left, input_right, input_forward, input_back).length() > 0.1
@@ -193,6 +205,12 @@ func perform_attack():
 	print("%s is attacking!" % name) #Debugging
 	can_attack = false
 	attack_cooldown_timer = attack_cooldown_time
+	
+	# Send attack to server
+	var client = get_node_or_null("/root/Client")
+	if client and client.IsServerConnected:
+		var attack_position = global_position + transform.basis.z * -1.5
+		send_attack_packet(attack_position)
 	
 	# Simple attack animation to show hitting
 	var tween = create_tween()
@@ -332,6 +350,12 @@ func take_flag():
 	is_flag_holder = true
 	flag.holder = self
 	reset_hits() 
+	
+	# Send flag pickup to server
+	var client = get_node_or_null("/root/Client")
+	if client and client.IsServerConnected:
+		send_flag_pickup_packet()
+	
 	print("%s took the flag!" % name)
 
 func drop_flag():
@@ -343,6 +367,11 @@ func drop_flag():
 	drop_position.y = global_position.y + 0.5
 	
 	flag.drop_at_position(drop_position)
+	
+	# Send flag drop to server
+	var client = get_node_or_null("/root/Client")
+	if client and client.IsServerConnected:
+		send_flag_drop_packet(drop_position)
 	
 	print("%s dropped the flag!" % name)
 
@@ -386,3 +415,117 @@ func check_input_mappings():
 	if can_crouch and not InputMap.has_action(input_crouch): push_error("Missing input: " + input_crouch); can_crouch = false
 	if not InputMap.has_action(input_drop_flag): push_error("Missing input: " + input_drop_flag)
 	if not InputMap.has_action(input_attack): push_error("Missing input: " + input_attack)
+
+# Network state synchronization method
+func set_network_state(hits: int, flag_holder: bool, player_score: float, stamina: float, anim_state: String):
+	current_hits = hits
+	is_flag_holder = flag_holder
+	score = player_score
+	stamina_current = stamina
+	
+	# Update animation state if different
+	if state_playback and state_playback.get_current_node() != anim_state:
+		state_playback.travel(anim_state)
+
+# Network packet creation functions
+func send_position_packet(position: Vector3, rotation: Vector3):
+	var client = get_node_or_null("/root/Client")
+	if client != null and client.IsServerConnected:
+		var packet = PackedByteArray()
+		packet.append(2) # PacketType.PlayerPosition
+		
+		# Debug each float conversion
+		var pos_x_bytes = float_to_bytes(position.x)
+		var pos_y_bytes = float_to_bytes(position.y)
+		var pos_z_bytes = float_to_bytes(position.z)
+		var rot_x_bytes = float_to_bytes(rotation.x)
+		var rot_y_bytes = float_to_bytes(rotation.y)
+		var rot_z_bytes = float_to_bytes(rotation.z)
+		
+		print("Position: ", position, " Rotation: ", rotation)
+		print("Rotation type: ", typeof(rotation), " Is Vector3: ", rotation is Vector3)
+		print("Float bytes sizes: ", pos_x_bytes.size(), ", ", pos_y_bytes.size(), ", ", pos_z_bytes.size(), ", ", rot_x_bytes.size(), ", ", rot_y_bytes.size(), ", ", rot_z_bytes.size())
+		print("Packet after position: ", packet.size(), " bytes")
+		packet.append_array(pos_x_bytes)
+		packet.append_array(pos_y_bytes)
+		packet.append_array(pos_z_bytes)
+		print("Packet after position floats: ", packet.size(), " bytes")
+		packet.append_array(rot_x_bytes)
+		packet.append_array(rot_y_bytes)
+		packet.append_array(rot_z_bytes)
+		print("Packet after rotation floats: ", packet.size(), " bytes")
+		
+		print("Sending position packet with ", packet.size(), " bytes")
+		client.SendData(packet)
+
+func send_state_packet(hits: int, is_flag_holder: bool, score: float, stamina: float, animation_state: String):
+	var client = get_node_or_null("/root/Client")
+	if client != null and client.IsServerConnected:
+		var packet = PackedByteArray()
+		packet.append(3) # PacketType.PlayerState
+		packet.append_array(int_to_bytes(hits))
+		packet.append(1 if is_flag_holder else 0) # Boolean as byte
+		packet.append_array(float_to_bytes(score))
+		packet.append_array(float_to_bytes(stamina))
+		# Send string length first, then string data
+		packet.append_array(int_to_bytes(animation_state.length()))
+		packet.append_array(animation_state.to_utf8_buffer())
+		client.SendData(packet)
+
+func send_attack_packet(attack_position: Vector3):
+	var client = get_node_or_null("/root/Client")
+	if client != null and client.IsServerConnected:
+		var packet = PackedByteArray()
+		packet.append(7) # PacketType.Attack
+		packet.append_array(float_to_bytes(attack_position.x))
+		packet.append_array(float_to_bytes(attack_position.y))
+		packet.append_array(float_to_bytes(attack_position.z))
+		client.SendData(packet)
+
+func send_flag_pickup_packet():
+	var client = get_node_or_null("/root/Client")
+	if client != null and client.IsServerConnected:
+		var packet = PackedByteArray()
+		packet.append(4) # PacketType.FlagUpdate
+		packet.append(1) # isPickup = true
+		packet.append_array(float_to_bytes(0.0)) # x
+		packet.append_array(float_to_bytes(0.0)) # y
+		packet.append_array(float_to_bytes(0.0)) # z
+		client.SendData(packet)
+
+func send_flag_drop_packet(position: Vector3):
+	var client = get_node_or_null("/root/Client")
+	if client != null and client.IsServerConnected:
+		var packet = PackedByteArray()
+		packet.append(4) # PacketType.FlagUpdate
+		packet.append(0) # isPickup = false
+		packet.append_array(float_to_bytes(position.x))
+		packet.append_array(float_to_bytes(position.y))
+		packet.append_array(float_to_bytes(position.z))
+		client.SendData(packet)
+
+# Helper functions to convert values to bytes
+func float_to_bytes(value: float) -> PackedByteArray:
+	var bytes = PackedByteArray()
+	# Convert float to 4 bytes (32-bit) using a more reliable method
+	var buffer = StreamPeerBuffer.new()
+	buffer.put_float(value)
+	buffer.seek(0)
+	# Read the float back to verify it was written correctly
+	var read_value = buffer.get_float()
+	print("Writing float ", value, ", read back as ", read_value)
+	# Reset and read the raw bytes
+	buffer.seek(0)
+	for i in range(4):
+		bytes.append(buffer.get_8())
+	print("Converting float ", value, " to ", bytes.size(), " bytes: ", bytes)
+	return bytes
+
+func int_to_bytes(value: int) -> PackedByteArray:
+	var bytes = PackedByteArray()
+	# Convert int to 4 bytes (32-bit)
+	var buffer = StreamPeerBuffer.new()
+	buffer.put_32(value)
+	buffer.seek(0)
+	bytes.append_array(buffer.get_data(4))
+	return bytes

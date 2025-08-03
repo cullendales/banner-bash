@@ -29,3 +29,17 @@ func drop_at_position(position: Vector3):
 	holder = null
 	global_position = position
 	visible = true
+
+# Network synchronization methods
+func handle_pickup():
+	# Handle flag being picked up by another player
+	visible = false
+	holder = null
+	print("Flag was picked up by another player")
+
+func handle_drop(position: Vector3):
+	# Handle flag being dropped by another player
+	visible = true
+	holder = null
+	global_position = position
+	print("Flag was dropped by another player at: ", position)
