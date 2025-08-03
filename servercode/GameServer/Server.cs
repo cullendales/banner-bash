@@ -22,7 +22,7 @@ namespace GameServer
 			Console.WriteLine("Starting server...");
 			InitializeServerData();
 
-			tcpListener = new TcpListener(IPAddress.Parse("127.0.0.1"), Port);
+			tcpListener = new TcpListener(IPAddress.Any, Port);
 			tcpListener.Start();
 			tcpListener.BeginAcceptTcpClient(new AsyncCallback(TCPConnectCallback), null);
 
