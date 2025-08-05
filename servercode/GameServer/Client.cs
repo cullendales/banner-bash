@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
-using System.Numerics;
 
 namespace GameServer
 {
@@ -87,7 +86,7 @@ namespace GameServer
 				using (MemoryStream stream = new MemoryStream())
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
-					writer.Write((byte)7); // PlayerJoined packet
+					writer.Write((byte)5); // PlayerJoined packet
 					writer.Write(client.id);
 					writer.Write(Server.ConnectedPlayers);
 					
@@ -182,32 +181,17 @@ namespace GameServer
 							BroadcastPlayerState(id, hits, isFlagHolder, score, stamina, animationState);
 							break;
 							
-						case 4: // FlagPickupRequest
-							float pickupX = reader.ReadSingle();
-							float pickupY = reader.ReadSingle();
-							float pickupZ = reader.ReadSingle();
+						case 4: // FlagUpdate
+							bool isPickup = reader.ReadBoolean();
+							float flagX = reader.ReadSingle();
+							float flagY = reader.ReadSingle();
+							float flagZ = reader.ReadSingle();
 							
-							Console.WriteLine($"Received FlagPickupRequest from client {id} at position ({pickupX}, {pickupY}, {pickupZ})");
+							Console.WriteLine($"Received FlagUpdate from client {id}: isPickup={isPickup}, position=({flagX}, {flagY}, {flagZ})");
 							
-							// Server handles flag pickup logic
-							bool pickupSuccess = Server.TryPickupFlag(id, new Vector3(pickupX, pickupY, pickupZ));
-							
-							// Send flag state update to all clients
-							BroadcastFlagState();
-							break;
-							
-						case 5: // FlagDropRequest
-							float dropX = reader.ReadSingle();
-							float dropY = reader.ReadSingle();
-							float dropZ = reader.ReadSingle();
-							
-							Console.WriteLine($"Received FlagDropRequest from client {id} at position ({dropX}, {dropY}, {dropZ})");
-							
-							// Server handles flag drop logic
-							Server.DropFlag(id, new Vector3(dropX, dropY, dropZ));
-							
-							// Send flag state update to all clients
-							BroadcastFlagState();
+							// Broadcast flag update to all clients
+							BroadcastFlagUpdate(id, isPickup, flagX, flagY, flagZ);
+							Console.WriteLine($"Broadcasted FlagUpdate to all clients");
 							break;
 							
 						case 7: // Attack
@@ -251,14 +235,8 @@ namespace GameServer
 							case 3: // PlayerState
 								Console.WriteLine("Expected size: variable (1 byte type + 4 bytes hits + 1 byte flag + 4 bytes score + 4 bytes stamina + 4 bytes string length + string data)");
 								break;
-													case 4: // FlagPickupRequest
-								Console.WriteLine("Expected size: 13 bytes (1 byte type + 3 floats × 4 bytes each)");
-								break;
-							case 5: // FlagDropRequest
-								Console.WriteLine("Expected size: 13 bytes (1 byte type + 3 floats × 4 bytes each)");
-								break;
-							case 6: // FlagState
-								Console.WriteLine("Expected size: 14 bytes (1 byte type + 1 byte hasHolder + 4 bytes holderId + 3 floats × 4 bytes each)");
+													case 4: // FlagUpdate
+								Console.WriteLine("Expected size: 18 bytes (1 byte type + 1 byte pickup + 3 floats × 4 bytes each)");
 								break;
 							case 7: // Attack
 								Console.WriteLine("Expected size: 13 bytes (1 byte type + 3 floats × 4 bytes each)");
@@ -332,22 +310,16 @@ namespace GameServer
 				}
 			}
 
-			private void BroadcastFlagState()
+			private void BroadcastFlagUpdate(int playerId, bool isPickup, float x, float y, float z)
 			{
-				Server.GetFlagState(out int? holderId, out Vector3 position);
-				
 				using (MemoryStream stream = new MemoryStream())
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
-					writer.Write((byte)6); // FlagState
-					writer.Write(holderId.HasValue);
-					if (holderId.HasValue)
-					{
-						writer.Write(holderId.Value);
-					}
-					writer.Write(position.X);
-					writer.Write(position.Y);
-					writer.Write(position.Z);
+					writer.Write((byte)4); // FlagUpdate
+					writer.Write(isPickup);
+					writer.Write(x);
+					writer.Write(y);
+					writer.Write(z);
 					
 					byte[] data = stream.ToArray();
 					BroadcastToAll(data);
@@ -359,7 +331,7 @@ namespace GameServer
 				using (MemoryStream stream = new MemoryStream())
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
-					writer.Write((byte)9); // Attack
+					writer.Write((byte)7); // Attack
 					writer.Write(attackerId);
 					writer.Write(x);
 					writer.Write(y);
@@ -375,7 +347,7 @@ namespace GameServer
 				using (MemoryStream stream = new MemoryStream())
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
-					writer.Write((byte)10); // TakeHit
+					writer.Write((byte)8); // TakeHit
 					writer.Write(targetPlayerId);
 					writer.Write(1); // damage
 					
@@ -400,7 +372,7 @@ namespace GameServer
 				using (MemoryStream stream = new MemoryStream())
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
-					writer.Write((byte)7); // PlayerJoined
+					writer.Write((byte)5); // PlayerJoined
 					writer.Write(id);
 					writer.Write(Server.ConnectedPlayers);
 					
@@ -437,7 +409,7 @@ namespace GameServer
 				using (MemoryStream stream = new MemoryStream())
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
-					writer.Write((byte)8); // PlayerLeft
+					writer.Write((byte)6); // PlayerLeft
 					writer.Write(id);
 					writer.Write(Server.ConnectedPlayers);
 					

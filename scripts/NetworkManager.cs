@@ -241,67 +241,7 @@ public partial class NetworkManager : Node
 		}
 	}
 
-	public void HandleFlagState(bool hasHolder, int? holderId, Vector3 position)
-	{
-		GD.Print($"NetworkManager: HandleFlagState called: hasHolder={hasHolder}, holderId={holderId}, position={position}");
-		
-		// Update flag state
-		var flag = GetNodeOrNull("../Flag");
-		if (flag == null)
-		{
-			flag = GetNodeOrNull("../Game/Flag");
-		}
-		
-		if (flag != null && flag.HasMethod("set_server_state"))
-		{
-			GD.Print("NetworkManager: Calling flag.set_server_state()");
-			var holderIdValue = holderId ?? -1; // Convert nullable int to regular int
-			flag.Call("set_server_state", hasHolder, holderIdValue, position);
-		}
-		else
-		{
-			GD.PrintErr("NetworkManager: Flag not found or missing set_server_state method");
-		}
-		
-		// Update player flag holder status
-		if (hasHolder && holderId.HasValue)
-		{
-			// Update the player who has the flag
-			if (holderId.Value == _myClientId)
-			{
-				var localPlayer = GetLocalPlayer();
-				if (localPlayer != null && localPlayer.HasMethod("set_flag_holder"))
-				{
-					localPlayer.Call("set_flag_holder", true);
-				}
-			}
-			else if (_otherPlayers.ContainsKey(holderId.Value))
-			{
-				var otherPlayer = _otherPlayers[holderId.Value];
-				if (otherPlayer != null && otherPlayer.HasMethod("set_flag_holder"))
-				{
-					otherPlayer.Call("set_flag_holder", true);
-				}
-			}
-		}
-		else
-		{
-			// Clear flag holder status from all players
-			var localPlayer = GetLocalPlayer();
-			if (localPlayer != null && localPlayer.HasMethod("set_flag_holder"))
-			{
-				localPlayer.Call("set_flag_holder", false);
-			}
-			
-			foreach (var player in _otherPlayers.Values)
-			{
-				if (player != null && player.HasMethod("set_flag_holder"))
-				{
-					player.Call("set_flag_holder", false);
-				}
-			}
-		}
-	}
+
 	
 	public void HandlePlayerAttack(int attackerId, Vector3 attackPosition)
 	{

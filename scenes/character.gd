@@ -211,8 +211,12 @@ func _physics_process(delta: float) -> void:
 	if state_playback.get_current_node() != target_state:
 		state_playback.travel(target_state)
 
-	# Server handles score calculation for flag holders
-	# No local score calculation needed
+	# Gain points if holding the flag
+	if is_flag_holder:
+		score += delta
+		if score >= 100:
+			print("%s wins!" % name)
+			get_tree().paused = true
 
 func perform_attack():
 	if not can_attack:
@@ -368,14 +372,17 @@ func take_flag():
 		print("Warning: Flag not found, cannot take flag")
 		return
 		
-	# Send flag pickup request to server (only if this is the local player)
+	is_flag_holder = true
+	flag.holder = self
+	reset_hits() 
+	
+	# Send flag pickup to server only if this is the local player
 	if can_move:
 		var client = get_node_or_null("/root/Client")
 		if client and client.IsServerConnected:
-			print("Sending flag pickup request to server")
-			send_flag_pickup_request()
+			send_flag_pickup_packet()
 	
-	print("%s requested flag pickup!" % name)
+	print("%s took the flag!" % name)
 
 func drop_flag():
 	if not is_flag_holder:
@@ -383,19 +390,22 @@ func drop_flag():
 		
 	if flag == null:
 		print("Warning: Flag not found, cannot drop flag")
+		is_flag_holder = false
 		return
 		
+	is_flag_holder = false
 	var drop_position = global_position + transform.basis.z * -2.0
 	drop_position.y = global_position.y + 0.5
 	
-	# Send flag drop request to server (only if this is the local player)
+	flag.drop_at_position(drop_position)
+	
+	# Send flag drop to server only if this is the local player
 	if can_move:
 		var client = get_node_or_null("/root/Client")
 		if client and client.IsServerConnected:
-			print("Sending flag drop request to server at position: ", drop_position)
-			send_flag_drop_request(drop_position)
+			send_flag_drop_packet(drop_position)
 	
-	print("%s requested flag drop!" % name)
+	print("%s dropped the flag!" % name)
 
 func force_drop_flag():
 	if is_flag_holder:
@@ -506,29 +516,27 @@ func send_attack_packet(attack_position: Vector3):
 		packet.append_array(float_to_bytes(attack_position.z))
 		client.SendData(packet)
 
-func send_flag_pickup_request():
+func send_flag_pickup_packet():
 	var client = get_node_or_null("/root/Client")
 	if client != null and client.IsServerConnected:
 		var packet = PackedByteArray()
-		packet.append(4) # PacketType.FlagPickupRequest
-		packet.append_array(float_to_bytes(global_position.x))
-		packet.append_array(float_to_bytes(global_position.y))
-		packet.append_array(float_to_bytes(global_position.z))
+		packet.append(4) # PacketType.FlagUpdate
+		packet.append(1) # isPickup = true
+		packet.append_array(float_to_bytes(0.0)) # x
+		packet.append_array(float_to_bytes(0.0)) # y
+		packet.append_array(float_to_bytes(0.0)) # z
 		client.SendData(packet)
 
-func send_flag_drop_request(position: Vector3):
+func send_flag_drop_packet(position: Vector3):
 	var client = get_node_or_null("/root/Client")
 	if client != null and client.IsServerConnected:
 		var packet = PackedByteArray()
-		packet.append(5) # PacketType.FlagDropRequest
+		packet.append(4) # PacketType.FlagUpdate
+		packet.append(0) # isPickup = false
 		packet.append_array(float_to_bytes(position.x))
 		packet.append_array(float_to_bytes(position.y))
 		packet.append_array(float_to_bytes(position.z))
 		client.SendData(packet)
-
-func set_flag_holder(value: bool):
-	is_flag_holder = value
-	print("%s flag holder status set to: %s" % [name, value])
 
 # Helper functions to convert values to bytes
 func float_to_bytes(value: float) -> PackedByteArray:
