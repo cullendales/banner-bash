@@ -50,6 +50,7 @@ var is_crouching: bool = false
 var score: float = 0.0
 var stamina_max = 100
 var stamina_current = stamina_max
+var is_first_person: bool = false
 
 ## Node References
 @onready var flag = get_tree().get_root().get_node_or_null("Map/Game/Flag")
@@ -67,7 +68,9 @@ var freeflying : bool = false
 @onready var collider: CollisionShape3D = $Collider
 
 func _ready() -> void:
-	$MeshInstance3D.visible = false # this should fix camera clipping
+	# this should fix camera clipping - works on my local
+	if can_move:
+		$MeshInstance3D.visible = false
 	check_input_mappings()
 	look_rotation.y = rotation.y
 	look_rotation.x = head.rotation.x
