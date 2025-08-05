@@ -39,8 +39,16 @@ namespace GameServer
 
 			for (int i = 1; i <= MaxPlayers; i++)
 			{
-				if (clients[i].tcp.socket == null)
+				// Check if the slot is available (socket is null or not connected)
+				if (clients[i].tcp.socket == null || !clients[i].tcp.socket.Connected)
 				{
+					// If socket exists but is not connected, clean it up
+					if (clients[i].tcp.socket != null)
+					{
+						clients[i].tcp.socket.Close();
+						clients[i].tcp.socket = null;
+					}
+					
 					clients[i].tcp.Connect(_client);
 					return;
 				}

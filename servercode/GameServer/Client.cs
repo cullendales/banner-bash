@@ -347,6 +347,7 @@ namespace GameServer
 					BroadcastPlayerLeft();
 					
 					socket.Close();
+					socket = null; // Set socket to null so the slot can be reused
 				}
 			}
 			
