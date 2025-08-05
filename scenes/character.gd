@@ -52,7 +52,7 @@ var stamina_max = 100
 var stamina_current = stamina_max
 
 ## Node References
-@onready var flag = get_parent().get_node("Flag")
+@onready var flag = get_tree().get_root().get_node_or_null("Map/Game/Flag")
 @onready var game = get_tree().get_root().get_node("Map/Game")
 @onready var anim_tree: AnimationTree = $MeshInstance3D/Player/AnimationTree
 @onready var state_playback: AnimationNodeStateMachinePlayback = anim_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback 
@@ -72,7 +72,16 @@ func _ready() -> void:
 	look_rotation.x = head.rotation.x
 	add_to_group("players")
 
+func set_can_move(value: bool) -> void:
+	can_move = value
+	print("%s can_move set to: %s" % [name, value])
+	print("%s: can_move=%s, name=%s" % [name, can_move, name])
+
 func _unhandled_input(event: InputEvent) -> void:
+	# Only handle input if this is the local player (can_move = true)
+	if not can_move:
+		return
+		
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		capture_mouse()
 	if Input.is_key_pressed(KEY_ESCAPE):
@@ -140,17 +149,27 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	
-	# Send network updates
-	var client = get_node_or_null("/root/Client")
-	if client and client.IsServerConnected:
-		# Send position updates (every few frames to avoid spam)
-		if Engine.get_process_frames() % 10 == 0:
-			send_position_packet(global_position, rotation)
-		
-		# Send state updates (less frequently)
-		if Engine.get_process_frames() % 30 == 0:
-			var current_animation = state_playback.get_current_node() if state_playback else "Idle"
-			send_state_packet(current_hits, is_flag_holder, score, stamina_current, current_animation)
+	# Send network updates only if this is the local player (can_move = true)
+	if can_move:
+		var client = get_node_or_null("/root/Client")
+		if client and client.IsServerConnected:
+			# Send position updates (every few frames to avoid spam)
+			if Engine.get_process_frames() % 10 == 0:
+				print("%s sending position packet at frame %d" % [name, Engine.get_process_frames()])
+				send_position_packet(global_position, rotation)
+		else:
+			if Engine.get_process_frames() % 60 == 0:  # Less frequent debug output
+				print("%s: can_move=%s, client=%s, IsServerConnected=%s" % [
+					name, 
+					can_move, 
+					"null" if client == null else "found",
+					"null" if client == null else client.IsServerConnected
+				])
+			
+			# Send state updates (less frequently)
+			if Engine.get_process_frames() % 30 == 0:
+				var current_animation = state_playback.get_current_node() if state_playback else "Idle"
+				send_state_packet(current_hits, is_flag_holder, score, stamina_current, current_animation)
 			
 	# Stamina and movement speed system
 	var is_moving := Input.get_vector(input_left, input_right, input_forward, input_back).length() > 0.1
@@ -206,11 +225,12 @@ func perform_attack():
 	can_attack = false
 	attack_cooldown_timer = attack_cooldown_time
 	
-	# Send attack to server
-	var client = get_node_or_null("/root/Client")
-	if client and client.IsServerConnected:
-		var attack_position = global_position + transform.basis.z * -1.5
-		send_attack_packet(attack_position)
+	# Send attack to server only if this is the local player
+	if can_move:
+		var client = get_node_or_null("/root/Client")
+		if client and client.IsServerConnected:
+			var attack_position = global_position + transform.basis.z * -1.5
+			send_attack_packet(attack_position)
 	
 	# Simple attack animation to show hitting
 	var tween = create_tween()
@@ -347,19 +367,29 @@ func toggle_crouch():
 		can_sprint = true
 
 func take_flag():
+	if flag == null:
+		print("Warning: Flag not found, cannot take flag")
+		return
+		
 	is_flag_holder = true
 	flag.holder = self
 	reset_hits() 
 	
-	# Send flag pickup to server
-	var client = get_node_or_null("/root/Client")
-	if client and client.IsServerConnected:
-		send_flag_pickup_packet()
+	# Send flag pickup to server only if this is the local player
+	if can_move:
+		var client = get_node_or_null("/root/Client")
+		if client and client.IsServerConnected:
+			send_flag_pickup_packet()
 	
 	print("%s took the flag!" % name)
 
 func drop_flag():
 	if not is_flag_holder:
+		return
+		
+	if flag == null:
+		print("Warning: Flag not found, cannot drop flag")
+		is_flag_holder = false
 		return
 		
 	is_flag_holder = false
@@ -368,10 +398,11 @@ func drop_flag():
 	
 	flag.drop_at_position(drop_position)
 	
-	# Send flag drop to server
-	var client = get_node_or_null("/root/Client")
-	if client and client.IsServerConnected:
-		send_flag_drop_packet(drop_position)
+	# Send flag drop to server only if this is the local player
+	if can_move:
+		var client = get_node_or_null("/root/Client")
+		if client and client.IsServerConnected:
+			send_flag_drop_packet(drop_position)
 	
 	print("%s dropped the flag!" % name)
 

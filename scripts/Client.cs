@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 
@@ -30,11 +31,19 @@ public partial class Client : Node          // ← must inherit Node
 	public TcpClient      _socket;
 	private NetworkStream  _stream;
 	private readonly byte[] _receiveBuffer = new byte[BufferSize];
+	private int _myClientId = -1;
+	private List<(int playerId, int totalPlayers)> _pendingPlayerJoinedPackets = new List<(int, int)>();
 	
 	// Public property for GDScript to check connection status
 	public bool IsServerConnected
 	{
 		get { return _socket != null && _socket.Connected; }
+	}
+	
+	// Public property to get the client ID
+	public int MyClientId
+	{
+		get { return _myClientId; }
 	}
 
 	public void ConnectToServer(string ip, int port)
@@ -171,16 +180,12 @@ public partial class Client : Node          // ← must inherit Node
 					int clientId = reader.ReadInt32();
 					GD.Print($"Welcome! Your client ID is: {clientId}");
 					// Store client ID for future use
-					var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
-					if (networkManager != null)
-					{
-						GD.Print("Found NetworkManager, setting client ID");
-						networkManager.SetMyClientId(clientId);
-					}
-					else
-					{
-						GD.PrintErr("NetworkManager not found!");
-					}
+					_myClientId = clientId;
+					GD.Print($"My client ID set to: {clientId}");
+					
+					// Try to set up NetworkManager with deferred execution
+					CallDeferred(nameof(SetupNetworkManagerDeferred), clientId);
+					
 					// Send welcome response back to server
 					SendWelcomeResponse(clientId);
 					break;
@@ -195,6 +200,7 @@ public partial class Client : Node          // ← must inherit Node
 					float rotZ = reader.ReadSingle();
 					
 					GD.Print($"Received PlayerPosition packet for player {playerId} at ({x}, {y}, {z}) with rotation ({rotX}, {rotY}, {rotZ})");
+					GD.Print($"My client ID is: {_myClientId}, updating position for player {playerId}");
 					// Update other player's position
 					UpdatePlayerPosition(playerId, new Vector3(x, y, z), new Vector3(rotX, rotY, rotZ));
 					break;
@@ -256,6 +262,7 @@ public partial class Client : Node          // ← must inherit Node
 					int totalPlayers = reader.ReadInt32();
 					
 					GD.Print($"PlayerJoined packet: Player {joinedPlayerId} joined, total players: {totalPlayers}");
+					GD.Print($"My client ID is: {_myClientId}");
 					// Handle player joined
 					HandlePlayerJoined(joinedPlayerId, totalPlayers);
 					break;
@@ -290,7 +297,7 @@ public partial class Client : Node          // ← must inherit Node
 	{
 		if (_stream != null && _socket.Connected)
 		{
-			GD.Print($"Sending packet type {data[0]} with {data.Length} bytes");
+			
 			_stream.BeginWrite(data, 0, data.Length, OnSend, null);
 		}
 	}
@@ -307,6 +314,34 @@ public partial class Client : Node          // ← must inherit Node
 			SendData(data);
 		}
 		GD.Print($"Sent welcome response with client ID: {clientId}");
+	}
+	
+	private void SetupNetworkManagerDeferred(int clientId)
+	{
+		GD.Print($"SetupNetworkManagerDeferred called for client {clientId}");
+		
+		// Try to find NetworkManager
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+			GD.Print($"Trying NetworkManager.Instance: {networkManager != null}");
+		}
+		
+		if (networkManager != null)
+		{
+			GD.Print($"Found NetworkManager, setting client ID");
+			networkManager.SetMyClientId(clientId);
+			
+			// Process any pending PlayerJoined packets
+			ProcessPendingPlayerJoinedPackets();
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager not found! Will retry in 0.1 seconds");
+			// Retry after a short delay
+			GetTree().CreateTimer(0.1f).Timeout += () => SetupNetworkManagerDeferred(clientId);
+		}
 	}
 
 	private void OnSend(IAsyncResult ar)
@@ -326,7 +361,31 @@ public partial class Client : Node          // ← must inherit Node
 	private void UpdatePlayerPosition(int playerId, Vector3 position, Vector3 rotation)
 	{
 		GD.Print($"UpdatePlayerPosition called for player {playerId} at {position} with rotation {rotation}");
+		GD.Print($"My client ID is: {_myClientId}, updating position for player {playerId}");
+		
+		// Use call_deferred to ensure this runs on the main thread
+		if (IsInsideTree())
+		{
+			CallDeferred(nameof(UpdatePlayerPositionDeferred), playerId, position, rotation);
+		}
+		else
+		{
+			GD.PrintErr("Not inside tree when updating player position!");
+		}
+	}
+	
+	private void UpdatePlayerPositionDeferred(int playerId, Vector3 position, Vector3 rotation)
+	{
+		GD.Print($"UpdatePlayerPositionDeferred called for player {playerId} at {position} with rotation {rotation}");
 		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		
+		// Fallback: try to get NetworkManager through singleton
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+			GD.Print($"Trying NetworkManager.Instance: {networkManager != null}");
+		}
+		
 		if (networkManager != null)
 		{
 			GD.Print($"Found NetworkManager, updating player {playerId} position");
@@ -335,13 +394,39 @@ public partial class Client : Node          // ← must inherit Node
 		else
 		{
 			GD.PrintErr($"NetworkManager not found at /root/Map/Server for player {playerId}");
+			GD.PrintErr($"Current scene tree structure:");
+			var root = GetTree().Root;
+			PrintSceneTree(root, 0);
 		}
 	}
-
+	
 	private void UpdatePlayerState(int playerId, int hits, bool isFlagHolder, float score, float stamina, string animationState)
 	{
 		GD.Print($"UpdatePlayerState called for player {playerId}: hits={hits}, flag={isFlagHolder}, score={score}, stamina={stamina}, anim={animationState}");
+		
+		// Use call_deferred to ensure this runs on the main thread
+		if (IsInsideTree())
+		{
+			CallDeferred(nameof(UpdatePlayerStateDeferred), playerId, hits, isFlagHolder, score, stamina, animationState);
+		}
+		else
+		{
+			GD.PrintErr("Not inside tree when updating player state!");
+		}
+	}
+	
+	private void UpdatePlayerStateDeferred(int playerId, int hits, bool isFlagHolder, float score, float stamina, string animationState)
+	{
+		GD.Print($"UpdatePlayerStateDeferred called for player {playerId}: hits={hits}, flag={isFlagHolder}, score={score}, stamina={stamina}, anim={animationState}");
 		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		
+		// Fallback: try to get NetworkManager through singleton
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+			GD.Print($"Trying NetworkManager.Instance: {networkManager != null}");
+		}
+		
 		if (networkManager != null)
 		{
 			GD.Print($"Found NetworkManager, updating player {playerId} state");
@@ -356,7 +441,30 @@ public partial class Client : Node          // ← must inherit Node
 	private void HandleFlagPickup()
 	{
 		GD.Print("HandleFlagPickup called");
+		
+		// Use call_deferred to ensure this runs on the main thread
+		if (IsInsideTree())
+		{
+			CallDeferred(nameof(HandleFlagPickupDeferred));
+		}
+		else
+		{
+			GD.PrintErr("Not inside tree when handling flag pickup!");
+		}
+	}
+	
+	private void HandleFlagPickupDeferred()
+	{
+		GD.Print("HandleFlagPickupDeferred called");
 		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		
+		// Fallback: try to get NetworkManager through singleton
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+			GD.Print($"Trying NetworkManager.Instance: {networkManager != null}");
+		}
+		
 		if (networkManager != null)
 		{
 			GD.Print("Found NetworkManager, handling flag pickup");
@@ -371,7 +479,30 @@ public partial class Client : Node          // ← must inherit Node
 	private void HandleFlagDrop(Vector3 position)
 	{
 		GD.Print($"HandleFlagDrop called at {position}");
+		
+		// Use call_deferred to ensure this runs on the main thread
+		if (IsInsideTree())
+		{
+			CallDeferred(nameof(HandleFlagDropDeferred), position);
+		}
+		else
+		{
+			GD.PrintErr("Not inside tree when handling flag drop!");
+		}
+	}
+	
+	private void HandleFlagDropDeferred(Vector3 position)
+	{
+		GD.Print($"HandleFlagDropDeferred called at {position}");
 		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		
+		// Fallback: try to get NetworkManager through singleton
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+			GD.Print($"Trying NetworkManager.Instance: {networkManager != null}");
+		}
+		
 		if (networkManager != null)
 		{
 			GD.Print("Found NetworkManager, handling flag drop");
@@ -403,16 +534,27 @@ public partial class Client : Node          // ← must inherit Node
 	
 	private void HandlePlayerJoined(int playerId, int totalPlayers)
 	{
-		GD.Print($"Player {playerId} joined. Total players: {totalPlayers}");
+		GD.Print($"HandlePlayerJoined called for player {playerId}, total players: {totalPlayers}");
+		
+		// Check if NetworkManager is ready
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+		}
+		
+		if (networkManager == null || _myClientId == -1)
+		{
+			GD.Print($"NetworkManager not ready or client ID not set, queuing PlayerJoined packet for player {playerId}");
+			_pendingPlayerJoinedPackets.Add((playerId, totalPlayers));
+			return;
+		}
+		
 		// Use call_deferred to ensure this runs on the main thread
 		if (IsInsideTree())
 		{
 			GD.Print($"Calling HandlePlayerJoinedDeferred for player {playerId}");
 			CallDeferred(nameof(HandlePlayerJoinedDeferred), playerId, totalPlayers);
-		}
-		else
-		{
-			GD.PrintErr("Not inside tree when handling player joined!");
 		}
 	}
 	
@@ -430,6 +572,28 @@ public partial class Client : Node          // ← must inherit Node
 	private void HandlePlayerJoinedDeferred(int playerId, int totalPlayers)
 	{
 		GD.Print($"HandlePlayerJoinedDeferred called for player {playerId}, total players: {totalPlayers}");
+		GD.Print($"My client ID is: {_myClientId}");
+		
+		// Handle player joined in NetworkManager
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		GD.Print($"NetworkManager at /root/Map/Server: {networkManager != null}");
+		
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+			GD.Print($"NetworkManager.Instance: {networkManager != null}");
+		}
+		
+		if (networkManager != null)
+		{
+			GD.Print("Found NetworkManager, handling player joined");
+			networkManager.HandlePlayerJoined(playerId, totalPlayers);
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager not found for player joined event");
+		}
+		
 		// Update connection status if available
 		var connectionStatus = GetNodeOrNull<ConnectionStatus>("/root/ConnectionStatus");
 		if (connectionStatus != null)
@@ -535,5 +699,28 @@ public partial class Client : Node          // ← must inherit Node
 		{
 			connectionUI.UpdateStatus("Disconnected");
 		}
+	}
+
+	private void PrintSceneTree(Node node, int depth)
+	{
+		var indent = new string(' ', depth * 2);
+		GD.PrintErr($"{indent}{node.Name} ({node.GetType().Name})");
+		for (int i = 0; i < node.GetChildCount(); i++)
+		{
+			PrintSceneTree(node.GetChild(i), depth + 1);
+		}
+	}
+	
+	private void ProcessPendingPlayerJoinedPackets()
+	{
+		GD.Print($"Processing {_pendingPlayerJoinedPackets.Count} pending PlayerJoined packets");
+		
+		foreach (var packet in _pendingPlayerJoinedPackets)
+		{
+			GD.Print($"Processing pending packet for player {packet.playerId}");
+			HandlePlayerJoinedDeferred(packet.playerId, packet.totalPlayers);
+		}
+		
+		_pendingPlayerJoinedPackets.Clear();
 	}
 }

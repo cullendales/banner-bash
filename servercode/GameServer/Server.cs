@@ -34,8 +34,11 @@ namespace GameServer
 			if (tcpListener == null) return;
 			
 			TcpClient _client = tcpListener.EndAcceptTcpClient(_result);
-			tcpListener.BeginAcceptTcpClient(new AsyncCallback(TCPConnectCallback), null);
-			Console.WriteLine($"Player connecting from {_client.Client.RemoteEndPoint}");
+			if (tcpListener != null)
+			{
+				tcpListener.BeginAcceptTcpClient(new AsyncCallback(TCPConnectCallback), null);
+			}
+			Console.WriteLine($"Player connecting from {_client.Client?.RemoteEndPoint}");
 
 			for (int i = 1; i <= MaxPlayers; i++)
 			{
@@ -58,7 +61,7 @@ namespace GameServer
 				}
 			}
 
-			Console.WriteLine($"{_client.Client.RemoteEndPoint} failed to connect: server full.");
+			Console.WriteLine($"{_client.Client?.RemoteEndPoint} failed to connect: server full.");
 		}
 
 		private static void InitializeServerData()

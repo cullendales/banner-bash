@@ -21,6 +21,20 @@ public partial class NetworkManager : Node
 		}
 		Instance = this;
 		GD.Print("NetworkManager instance set");
+		GD.Print($"NetworkManager path: {GetPath()}");
+		
+		// Auto-load PlayerScene if not set
+		if (PlayerScene == null)
+		{
+			PlayerScene = GD.Load<PackedScene>("res://scenes/Character.tscn");
+			GD.Print("Auto-loaded Character scene for PlayerScene");
+		}
+	}
+	
+	public override void _Ready()
+	{
+		GD.Print("NetworkManager._Ready called");
+		GD.Print($"NetworkManager is now ready at path: {GetPath()}");
 	}
 	
 	public void SetMyClientId(int clientId)
@@ -28,6 +42,105 @@ public partial class NetworkManager : Node
 		GD.Print($"NetworkManager.SetMyClientId called with {clientId}. Current ID: {_myClientId}");
 		_myClientId = clientId;
 		GD.Print($"My client ID set to: {clientId}");
+		
+		// Create a player for this client
+		CreateLocalPlayer(clientId);
+		
+		// Broadcast that we joined (this will be handled by the server)
+		// The server will send PlayerJoined packets to all clients
+	}
+	
+	private void CreateLocalPlayer(int clientId)
+	{
+		GD.Print($"CreateLocalPlayer called for client {clientId}");
+		
+		if (PlayerScene == null)
+		{
+			GD.PrintErr("PlayerScene not set in NetworkManager!");
+			return;
+		}
+		
+		// Remove any existing local player
+		var existingPlayer = GetNodeOrNull("../Character");
+		if (existingPlayer != null)
+		{
+			GD.Print("Removing existing local player");
+			existingPlayer.QueueFree();
+		}
+		
+		// Create new local player
+		var newPlayer = PlayerScene.Instantiate<CharacterBody3D>();
+		newPlayer.Name = $"Character"; // Keep the same name for compatibility
+		
+		// Set initial position based on client ID
+		var spawnPosition = GetSpawnPosition(clientId);
+		newPlayer.GlobalPosition = spawnPosition;
+		
+		// Enable movement for local player
+		if (newPlayer.HasMethod("set_can_move"))
+		{
+			GD.Print($"Calling set_can_move(true) on local player {newPlayer.Name}");
+			newPlayer.Call("set_can_move", true);
+		}
+		else
+		{
+			GD.PrintErr($"Local player {newPlayer.Name} does not have set_can_move method!");
+		}
+		
+		// Add to the scene
+		GetParent().AddChild(newPlayer);
+		
+		// Capture mouse for local player
+		if (newPlayer.HasMethod("capture_mouse"))
+		{
+			newPlayer.Call("capture_mouse");
+		}
+		
+		GD.Print($"Created local player for client {clientId} at {spawnPosition}");
+	}
+	
+	private Vector3 GetSpawnPosition(int clientId)
+	{
+		Vector3 spawnPos;
+		
+		// Define spawn positions for different clients - more spread out
+		switch (clientId)
+		{
+			case 1:
+				spawnPos = new Vector3(10.0f, 1.1f, 5.0f); // Top right corner
+				break;
+			case 2:
+				spawnPos = new Vector3(0.0f, 1.1f, 0.0f); // Center of map
+				break;
+			case 3:
+				spawnPos = new Vector3(10.0f, 1.1f, -5.0f); // Bottom right corner
+				break;
+			case 4:
+				spawnPos = new Vector3(-10.0f, 1.1f, -5.0f); // Bottom left corner
+				break;
+			case 5:
+				spawnPos = new Vector3(0.0f, 1.1f, 8.0f); // Top center
+				break;
+			case 6:
+				spawnPos = new Vector3(0.0f, 1.1f, -8.0f); // Bottom center
+				break;
+			case 7:
+				spawnPos = new Vector3(8.0f, 1.1f, 0.0f); // Right center
+				break;
+			case 8:
+				spawnPos = new Vector3(-8.0f, 1.1f, 0.0f); // Left center
+				break;
+			default:
+				// Generate a random position for additional players
+				var random = new Random();
+				var x = (float)(random.NextDouble() * 20.0 - 10.0); // -10 to 10
+				var z = (float)(random.NextDouble() * 16.0 - 8.0);  // -8 to 8
+				spawnPos = new Vector3(x, 1.1f, z);
+				break;
+		}
+		
+		GD.Print($"Spawn position for client {clientId}: {spawnPos}");
+		return spawnPos;
 	}
 	
 	public void UpdatePlayerPosition(int playerId, Vector3 position, Vector3 rotation)
@@ -123,20 +236,44 @@ public partial class NetworkManager : Node
 	
 	private void CreateOtherPlayer(int playerId)
 	{
+		GD.Print($"CreateOtherPlayer called for player {playerId}");
+		
 		if (PlayerScene == null)
 		{
 			GD.PrintErr("PlayerScene not set in NetworkManager!");
 			return;
 		}
 		
+		// Check if player already exists
+		if (_otherPlayers.ContainsKey(playerId))
+		{
+			GD.Print($"Player {playerId} already exists, skipping creation");
+			return;
+		}
+		
 		var newPlayer = PlayerScene.Instantiate<CharacterBody3D>();
 		newPlayer.Name = $"Player{playerId}";
+		
+		// Set initial position based on client ID
+		var spawnPosition = GetSpawnPosition(playerId);
+		newPlayer.GlobalPosition = spawnPosition;
+		
+		// Disable movement for other players (they're controlled by network)
+		if (newPlayer.HasMethod("set_can_move"))
+		{
+			GD.Print($"Calling set_can_move(false) on other player {newPlayer.Name}");
+			newPlayer.Call("set_can_move", false);
+		}
+		else
+		{
+			GD.PrintErr($"Other player {newPlayer.Name} does not have set_can_move method!");
+		}
 		
 		// Add to the scene
 		GetParent().AddChild(newPlayer);
 		_otherPlayers[playerId] = newPlayer;
 		
-		GD.Print($"Created other player: {playerId}");
+		GD.Print($"Created other player: {playerId} at {spawnPosition}");
 	}
 	
 	public void RemovePlayer(int playerId)
@@ -163,5 +300,22 @@ public partial class NetworkManager : Node
 			}
 		}
 		_otherPlayers.Clear();
+	}
+	
+	public void HandlePlayerJoined(int playerId, int totalPlayers)
+	{
+		GD.Print($"Player {playerId} joined. Total players: {totalPlayers}");
+		
+		// If this is another player (not us), create their character
+		if (playerId != _myClientId)
+		{
+			CreateOtherPlayer(playerId);
+		}
+	}
+	
+	public CharacterBody3D GetLocalPlayer()
+	{
+		// Return the local player character
+		return GetNodeOrNull<CharacterBody3D>("../Character");
 	}
 } 

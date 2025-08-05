@@ -49,6 +49,9 @@ namespace GameServer
 			// Send welcome packet to the client
 			SendWelcome();
 			
+			// Send existing players to the new client
+			SendExistingPlayers();
+			
 			// Broadcast player joined to all clients
 			BroadcastPlayerJoined();
 		}
@@ -66,6 +69,31 @@ namespace GameServer
 			}
 			
 			Console.WriteLine($"Sent welcome packet to client {id}");
+		}
+		
+		private void SendExistingPlayers()
+		{
+			Console.WriteLine($"Sending existing players to client {id}");
+			
+			foreach (var client in Server.clients.Values)
+			{
+				// Skip ourselves and disconnected clients
+				if (client.id == id || client.tcp.socket == null || !client.tcp.socket.Connected)
+					continue;
+					
+				Console.WriteLine($"Sending existing player {client.id} to new client {id}");
+				
+				using (MemoryStream stream = new MemoryStream())
+				using (BinaryWriter writer = new BinaryWriter(stream))
+				{
+					writer.Write((byte)5); // PlayerJoined packet
+					writer.Write(client.id);
+					writer.Write(Server.ConnectedPlayers);
+					
+					byte[] data = stream.ToArray();
+					SendData(data);
+				}
+			}
 		}
 
 			private void ReceiveCallback(IAsyncResult _result)
@@ -88,7 +116,10 @@ namespace GameServer
 					// Handle the received packet
 					HandlePacket(_data);
 					
-					stream.BeginRead(receiveBuffer, 0, dataBufferSize, ReceiveCallback, null);
+					if (stream != null && receiveBuffer != null)
+					{
+						stream.BeginRead(receiveBuffer, 0, dataBufferSize, ReceiveCallback, null);
+					}
 				}
 				catch (Exception _ex)
 				{
@@ -117,41 +148,7 @@ namespace GameServer
 							
 							case 9: // SlotRequest (PacketType.SlotRequest)
 								int requestedSlot = reader.ReadInt32();
-								Console.WriteLine($"Client {id} requesting slot {requestedSlot}");
-								
-								// Check if the requested slot is available
-								if (requestedSlot >= 1 && requestedSlot <= Server.MaxPlayers)
-								{
-									if (Server.clients[requestedSlot].tcp.socket == null || !Server.clients[requestedSlot].tcp.socket.Connected)
-									{
-										// Slot is available, reassign this client to the requested slot
-										Console.WriteLine($"Moving client {id} to slot {requestedSlot}");
-										
-										// Disconnect from current slot
-										if (socket != null && socket.Connected)
-										{
-											socket.Close();
-											socket = null;
-										}
-										
-										// Reassign to new slot
-										Server.clients[requestedSlot].tcp.socket = socket;
-										Server.clients[requestedSlot].tcp.stream = stream;
-										Server.clients[requestedSlot].tcp.receiveBuffer = receiveBuffer;
-										
-										// Send new welcome packet with the requested slot ID
-										Server.clients[requestedSlot].tcp.SendWelcome();
-										return;
-									}
-									else
-									{
-										Console.WriteLine($"Slot {requestedSlot} is already occupied");
-									}
-								}
-								else
-								{
-									Console.WriteLine($"Invalid slot request: {requestedSlot}");
-								}
+								Console.WriteLine($"Client {id} requested slot {requestedSlot} - not implemented");
 								break;
 							
 						case 2: // PlayerPosition

@@ -1,11 +1,10 @@
-[gd_scene load_steps=11 format=3 uid="uid://bghjiufqgdsme"]
+[gd_scene load_steps=10 format=3 uid="uid://bghjiufqgdsme"]
 
 [ext_resource type="Material" uid="uid://bjw2tk8edhqs5" path="res://gray.tres" id="1_0cso3"]
 [ext_resource type="Script" uid="uid://cua7f2b4744ti" path="res://scenes/map.gd" id="1_2lpho"]
 [ext_resource type="PackedScene" uid="uid://tqjv7mfgiixx" path="res://scenes/flag.tscn" id="1_paxxb"]
 [ext_resource type="PackedScene" uid="uid://53dwmmceaina" path="res://scenes/hud.tscn" id="3_gldc4"]
 [ext_resource type="PackedScene" uid="uid://5wbqc3h0u10n" path="res://scenes/powerup.tscn" id="4_0cso3"]
-[ext_resource type="PackedScene" uid="uid://ceq4wg5n8cspw" path="res://scenes/Character.tscn" id="4_2klcf"]
 [ext_resource type="Script" uid="uid://bvcf5jo6ko3l0" path="res://scripts/NetworkManager.cs" id="7_nakos"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_a202f"]
@@ -260,17 +259,6 @@ material = ExtResource("1_0cso3")
 [node name="Flag" parent="Game" instance=ExtResource("1_paxxb")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 0, 0)
 visible = false
-
-[node name="Player 1" parent="Game" instance=ExtResource("4_2klcf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.6, 1.1, 2.02549)
-
-[node name="TestDummy" parent="Game" instance=ExtResource("4_2klcf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.76837e-07, -1.88781, 1.5815)
-can_move = false
-
-[node name="Player 2" parent="Game" instance=ExtResource("4_2klcf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0999997, -1.4, 3.72549)
-can_move = false
 
 [node name="HUD" parent="." instance=ExtResource("3_gldc4")]
 
