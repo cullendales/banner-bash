@@ -375,10 +375,11 @@ func take_flag():
 	flag.holder = self
 	reset_hits() 
 	
-	# Send flag pickup to server only if this is the local player
+	# Send flag pickup to server first (only if this is the local player)
 	if can_move:
 		var client = get_node_or_null("/root/Client")
 		if client and client.IsServerConnected:
+			print("Sending flag pickup packet")
 			send_flag_pickup_packet()
 	
 	print("%s took the flag!" % name)
@@ -396,13 +397,15 @@ func drop_flag():
 	var drop_position = global_position + transform.basis.z * -2.0
 	drop_position.y = global_position.y + 0.5
 	
-	flag.drop_at_position(drop_position)
-	
-	# Send flag drop to server only if this is the local player
+	# Send flag drop to server first (only if this is the local player)
 	if can_move:
 		var client = get_node_or_null("/root/Client")
 		if client and client.IsServerConnected:
+			print("Sending flag drop packet with position: ", drop_position)
 			send_flag_drop_packet(drop_position)
+	
+	# Then update local flag
+	flag.drop_at_position(drop_position)
 	
 	print("%s dropped the flag!" % name)
 
@@ -453,6 +456,8 @@ func set_network_state(hits: int, flag_holder: bool, player_score: float, stamin
 	is_flag_holder = flag_holder
 	score = player_score
 	stamina_current = stamina
+	
+	print("%s: set_network_state called, is_flag_holder set to: %s" % [name, flag_holder])
 	
 	# Update animation state if different
 	if state_playback and state_playback.get_current_node() != anim_state:

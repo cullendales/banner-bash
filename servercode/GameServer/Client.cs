@@ -182,8 +182,11 @@ namespace GameServer
 							float flagY = reader.ReadSingle();
 							float flagZ = reader.ReadSingle();
 							
+							Console.WriteLine($"Received FlagUpdate from client {id}: isPickup={isPickup}, position=({flagX}, {flagY}, {flagZ})");
+							
 							// Broadcast flag update to all clients
 							BroadcastFlagUpdate(id, isPickup, flagX, flagY, flagZ);
+							Console.WriteLine($"Broadcasted FlagUpdate to all clients");
 							break;
 							
 						case 7: // Attack

@@ -165,6 +165,8 @@ public partial class NetworkManager : Node
 	{
 		if (playerId == _myClientId) return; // Don't update our own player
 		
+		GD.Print($"NetworkManager: UpdatePlayerState for player {playerId}, isFlagHolder={isFlagHolder}");
+		
 		if (!_otherPlayers.ContainsKey(playerId))
 		{
 			CreateOtherPlayer(playerId);
@@ -173,27 +175,69 @@ public partial class NetworkManager : Node
 		var player = _otherPlayers[playerId];
 		if (player != null && player.HasMethod("set_network_state"))
 		{
+			GD.Print($"NetworkManager: Calling set_network_state for player {playerId} with isFlagHolder={isFlagHolder}");
 			player.Call("set_network_state", hits, isFlagHolder, score, stamina, animationState);
+		}
+		
+		// Update HUD with the new score
+		var hud = GetNodeOrNull<CanvasLayer>("/root/Map/HUD");
+		GD.Print($"NetworkManager: HUD found: {hud != null}");
+		if (hud != null)
+		{
+			GD.Print($"NetworkManager: HUD has update_player_score method: {hud.HasMethod("update_player_score")}");
+			if (hud.HasMethod("update_player_score"))
+			{
+				GD.Print($"NetworkManager: Calling update_player_score for player {playerId} with score {score}");
+				hud.Call("update_player_score", playerId, score);
+			}
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager: HUD not found at /root/Map/HUD");
 		}
 	}
 	
 	public void HandleFlagPickup()
 	{
+		GD.Print("NetworkManager: HandleFlagPickup called");
 		// Handle flag pickup by another player
 		var flag = GetNodeOrNull("../Flag");
+		GD.Print($"NetworkManager: Flag found at ../Flag: {flag != null}");
+		if (flag == null)
+		{
+			flag = GetNodeOrNull("../Game/Flag");
+			GD.Print($"NetworkManager: Flag found at ../Game/Flag: {flag != null}");
+		}
 		if (flag != null && flag.HasMethod("handle_pickup"))
 		{
+			GD.Print("NetworkManager: Calling flag.handle_pickup()");
 			flag.Call("handle_pickup");
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager: Flag not found or missing handle_pickup method");
 		}
 	}
 	
 	public void HandleFlagDrop(Vector3 position)
 	{
+		GD.Print($"NetworkManager: HandleFlagDrop called at {position}");
 		// Handle flag drop by another player
 		var flag = GetNodeOrNull("../Flag");
+		GD.Print($"NetworkManager: Flag found at ../Flag: {flag != null}");
+		if (flag == null)
+		{
+			flag = GetNodeOrNull("../Game/Flag");
+			GD.Print($"NetworkManager: Flag found at ../Game/Flag: {flag != null}");
+		}
 		if (flag != null && flag.HasMethod("handle_drop"))
 		{
+			GD.Print("NetworkManager: Calling flag.handle_drop()");
 			flag.Call("handle_drop", position);
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager: Flag not found or missing handle_drop method");
 		}
 	}
 	
@@ -317,5 +361,15 @@ public partial class NetworkManager : Node
 	{
 		// Return the local player character
 		return GetNodeOrNull<CharacterBody3D>("../Character");
+	}
+	
+	public int GetMyClientId()
+	{
+		return _myClientId;
+	}
+	
+	public Dictionary<int, CharacterBody3D> GetOtherPlayers()
+	{
+		return _otherPlayers;
 	}
 } 
