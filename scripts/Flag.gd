@@ -8,13 +8,19 @@ func _ready():
 	visible = true
 
 func _process(delta):
-	# Follow holder if someone has it
-	if holder and holder.is_flag_holder and is_being_held:
-		visible = true  # Keep flag visible when held
-		# Position flag above holder's head - made higher so you can see it
-		global_position = holder.global_position + Vector3(0, 3.0, 0)
+	if holder and holder.is_flag_holder:
+		visible = true
 
-
+		# how far behind and how high above the player's origin:
+		var back_dist : float = -0.5
+		var up_dist   : float = 0.2
+		
+		# build an offset transform
+		var offset = Transform3D.IDENTITY
+		offset.origin = Vector3(0, up_dist, -back_dist)
+		
+		# multiply the player's global transform (rotation + position)
+		global_transform = holder.global_transform * offset
 	else:
 		# Show flag when dropped
 		if is_being_held:
