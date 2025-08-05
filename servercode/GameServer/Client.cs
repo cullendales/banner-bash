@@ -104,14 +104,54 @@ namespace GameServer
 					using (MemoryStream stream = new MemoryStream(data))
 					using (BinaryReader reader = new BinaryReader(stream))
 					{
-											byte packetType = reader.ReadByte();
-					Console.WriteLine($"Received packet type {packetType} from client {id} with {data.Length} bytes");
+						byte packetType = reader.ReadByte();
+						Console.WriteLine($"Received packet type {packetType} from client {id} with {data.Length} bytes");
 						
 						switch (packetType)
 						{
 							case 1: // Welcome
 								int clientId = reader.ReadInt32();
 								Console.WriteLine($"Client {id} sent welcome with ID: {clientId}");
+								Console.WriteLine($"Client {id} welcome response received successfully");
+								break;
+							
+							case 9: // SlotRequest (PacketType.SlotRequest)
+								int requestedSlot = reader.ReadInt32();
+								Console.WriteLine($"Client {id} requesting slot {requestedSlot}");
+								
+								// Check if the requested slot is available
+								if (requestedSlot >= 1 && requestedSlot <= Server.MaxPlayers)
+								{
+									if (Server.clients[requestedSlot].tcp.socket == null || !Server.clients[requestedSlot].tcp.socket.Connected)
+									{
+										// Slot is available, reassign this client to the requested slot
+										Console.WriteLine($"Moving client {id} to slot {requestedSlot}");
+										
+										// Disconnect from current slot
+										if (socket != null && socket.Connected)
+										{
+											socket.Close();
+											socket = null;
+										}
+										
+										// Reassign to new slot
+										Server.clients[requestedSlot].tcp.socket = socket;
+										Server.clients[requestedSlot].tcp.stream = stream;
+										Server.clients[requestedSlot].tcp.receiveBuffer = receiveBuffer;
+										
+										// Send new welcome packet with the requested slot ID
+										Server.clients[requestedSlot].tcp.SendWelcome();
+										return;
+									}
+									else
+									{
+										Console.WriteLine($"Slot {requestedSlot} is already occupied");
+									}
+								}
+								else
+								{
+									Console.WriteLine($"Invalid slot request: {requestedSlot}");
+								}
 								break;
 							
 						case 2: // PlayerPosition

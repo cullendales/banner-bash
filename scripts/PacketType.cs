@@ -9,7 +9,8 @@ public enum PacketType : byte
 	PlayerLeft = 6,
 	Attack = 7,
 	TakeHit = 8,
-	PowerupSpawn = 9,
-	PowerupPickup = 10,
-	GameState = 11
+	SlotRequest = 9,
+	PowerupSpawn = 10,
+	PowerupPickup = 11,
+	GameState = 12
 } 

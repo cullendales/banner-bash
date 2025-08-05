@@ -13,12 +13,19 @@ public partial class NetworkManager : Node
 	
 	public override void _EnterTree()
 	{
-		if (Instance != null) { QueueFree(); return; }
+		GD.Print($"NetworkManager._EnterTree called. Instance: {Instance}");
+		if (Instance != null) { 
+			GD.Print("Another NetworkManager instance exists, calling QueueFree()");
+			QueueFree(); 
+			return; 
+		}
 		Instance = this;
+		GD.Print("NetworkManager instance set");
 	}
 	
 	public void SetMyClientId(int clientId)
 	{
+		GD.Print($"NetworkManager.SetMyClientId called with {clientId}. Current ID: {_myClientId}");
 		_myClientId = clientId;
 		GD.Print($"My client ID set to: {clientId}");
 	}
