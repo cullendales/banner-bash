@@ -220,23 +220,20 @@ public partial class Client : Node          // ← must inherit Node
 					UpdatePlayerState(statePlayerId, hits, isFlagHolder, score, stamina, animationState);
 					break;
 					
-				case PacketType.FlagUpdate:
-					bool isPickup = reader.ReadBoolean();
+				case PacketType.FlagState:
+					bool hasHolder = reader.ReadBoolean();
+					int? holderId = null;
+					if (hasHolder)
+					{
+						holderId = reader.ReadInt32();
+					}
 					float flagX = reader.ReadSingle();
 					float flagY = reader.ReadSingle();
 					float flagZ = reader.ReadSingle();
 					
-					GD.Print($"Received FlagUpdate packet: isPickup={isPickup}, position=({flagX}, {flagY}, {flagZ})");
-					if (isPickup)
-					{
-						// Flag was picked up by someone
-						HandleFlagPickup();
-					}
-					else
-					{
-						// Flag was dropped at position
-						HandleFlagDrop(new Vector3(flagX, flagY, flagZ));
-					}
+					GD.Print($"Received FlagState packet: hasHolder={hasHolder}, holderId={holderId}, position=({flagX}, {flagY}, {flagZ})");
+					// Handle flag state update
+					HandleFlagState(hasHolder, holderId, new Vector3(flagX, flagY, flagZ));
 					break;
 					
 				case PacketType.Attack:
@@ -511,6 +508,45 @@ public partial class Client : Node          // ← must inherit Node
 		else
 		{
 			GD.PrintErr("NetworkManager not found at /root/Map/Server for flag drop");
+		}
+	}
+
+	private void HandleFlagState(bool hasHolder, int? holderId, Vector3 position)
+	{
+		GD.Print($"HandleFlagState called: hasHolder={hasHolder}, holderId={holderId}, position={position}");
+		
+		// Use call_deferred to ensure this runs on the main thread
+		if (IsInsideTree())
+		{
+			var holderIdValue = holderId ?? -1; // Convert nullable int to regular int
+			CallDeferred(nameof(HandleFlagStateDeferred), hasHolder, holderIdValue, position);
+		}
+		else
+		{
+			GD.PrintErr("Not inside tree when handling flag state!");
+		}
+	}
+	
+	private void HandleFlagStateDeferred(bool hasHolder, int holderId, Vector3 position)
+	{
+		GD.Print($"HandleFlagStateDeferred called: hasHolder={hasHolder}, holderId={holderId}, position={position}");
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		
+		// Fallback: try to get NetworkManager through singleton
+		if (networkManager == null)
+		{
+			networkManager = NetworkManager.Instance;
+			GD.Print($"Trying NetworkManager.Instance: {networkManager != null}");
+		}
+		
+		if (networkManager != null)
+		{
+			GD.Print("Found NetworkManager, handling flag state");
+			networkManager.HandleFlagState(hasHolder, holderId, position);
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager not found at /root/Map/Server for flag state");
 		}
 	}
 

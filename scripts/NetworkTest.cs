@@ -63,14 +63,14 @@ public partial class NetworkTest : Control
 	{
 		if (Client.Instance != null && Client.Instance.IsServerConnected)
 		{
-			// Create a simple test flag pickup packet
-			var packet = new byte[] { (byte)PacketType.FlagUpdate, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+			// Create a simple test flag pickup request packet
+			var packet = new byte[] { (byte)PacketType.FlagPickupRequest, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 			Client.Instance.SendData(packet);
-			UpdateStatus("Sent test flag pickup");
+			UpdateStatus("Sent test flag pickup request");
 		}
 		else
 		{
-			UpdateStatus("Not connected - cannot send flag pickup");
+			UpdateStatus("Not connected - cannot send flag pickup request");
 		}
 	}
 	

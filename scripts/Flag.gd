@@ -71,3 +71,28 @@ func handle_drop(position: Vector3):
 	global_position = position
 	print("Flag was dropped by another player at: ", position)
 	print("Flag: Now visible on ground at position: ", position)
+
+# Server-authoritative flag state
+func set_server_state(has_holder: bool, holder_id: int, position: Vector3):
+	print("Flag: set_server_state called: has_holder=%s, holder_id=%s, position=%s" % [has_holder, holder_id, position])
+	
+	if has_holder:
+		is_being_held = true
+		# Find the player with the given ID
+		var map = get_tree().get_root().get_node_or_null("Map")
+		if map:
+			if holder_id == 1:  # Local player
+				var local_player = map.get_node_or_null("Character")
+				if local_player:
+					holder = local_player
+					print("Flag: Assigned to local player")
+			else:  # Other player
+				var other_player = map.get_node_or_null("Player%d" % holder_id)
+				if other_player:
+					holder = other_player
+					print("Flag: Assigned to other player %d" % holder_id)
+	else:
+		is_being_held = false
+		holder = null
+		global_position = position
+		print("Flag: Dropped at position %s" % position)
