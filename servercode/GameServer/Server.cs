@@ -42,13 +42,17 @@ namespace GameServer
 				// Check if the slot is available (socket is null or not connected)
 				if (clients[i].tcp.socket == null || !clients[i].tcp.socket.Connected)
 				{
+					Console.WriteLine($"Found available slot {i}. Socket null: {clients[i].tcp.socket == null}, Connected: {(clients[i].tcp.socket != null ? clients[i].tcp.socket.Connected : false)}");
+					
 					// If socket exists but is not connected, clean it up
 					if (clients[i].tcp.socket != null)
 					{
+						Console.WriteLine($"Cleaning up disconnected socket in slot {i}");
 						clients[i].tcp.socket.Close();
 						clients[i].tcp.socket = null;
 					}
 					
+					Console.WriteLine($"Assigning new client to slot {i}");
 					clients[i].tcp.Connect(_client);
 					return;
 				}

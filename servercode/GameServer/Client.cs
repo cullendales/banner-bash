@@ -332,7 +332,7 @@ namespace GameServer
 					writer.Write(Server.ConnectedPlayers);
 					
 					byte[] data = stream.ToArray();
-					BroadcastToAll(data);
+					BroadcastToAll(data, id); // Exclude the current client from the broadcast
 				}
 			}
 			
@@ -348,6 +348,11 @@ namespace GameServer
 					
 					socket.Close();
 					socket = null; // Set socket to null so the slot can be reused
+					Console.WriteLine($"Socket for player {id} set to null");
+				}
+				else
+				{
+					Console.WriteLine($"Player {id} disconnect called but socket was null or not connected");
 				}
 			}
 			

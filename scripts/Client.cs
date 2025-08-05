@@ -120,6 +120,7 @@ public partial class Client : Node          // ← must inherit Node
 			byte[] data = new byte[len];
 			Array.Copy(_receiveBuffer, data, len);
 
+			GD.Print($"Received {len} bytes from server");
 			// Parse the packet
 			HandlePacket(data);
 
@@ -138,6 +139,7 @@ public partial class Client : Node          // ← must inherit Node
 		using (BinaryReader reader = new BinaryReader(stream))
 		{
 			PacketType packetType = (PacketType)reader.ReadByte();
+			GD.Print($"Handling packet type: {packetType}");
 			
 			switch (packetType)
 			{
@@ -220,6 +222,7 @@ public partial class Client : Node          // ← must inherit Node
 					int joinedPlayerId = reader.ReadInt32();
 					int totalPlayers = reader.ReadInt32();
 					
+					GD.Print($"PlayerJoined packet: Player {joinedPlayerId} joined, total players: {totalPlayers}");
 					// Handle player joined
 					HandlePlayerJoined(joinedPlayerId, totalPlayers);
 					break;
