@@ -356,6 +356,7 @@ namespace GameServer
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
 					writer.Write((byte)4); // FlagUpdate
+					writer.Write(playerId);         
 					writer.Write(isPickup);
 					writer.Write(x);
 					writer.Write(y);
