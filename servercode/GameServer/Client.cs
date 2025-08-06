@@ -8,6 +8,20 @@ namespace GameServer
 {
 	class Client
 	{
+		public enum PacketType : byte
+		{
+			Welcome = 1,
+			PlayerPosition = 2,
+			PlayerState = 3,
+			FlagUpdate = 4,
+			PlayerJoined = 5,
+			PlayerLeft = 6,
+			Attack = 7,
+			TakeHit = 8,
+			SlotRequest = 9,
+			RequestFlagPickup = 10
+		}
+
 		public int id;
 		public TCP tcp;
 
@@ -210,6 +224,33 @@ namespace GameServer
 							BroadcastTakeHit(id, targetPlayerId);
 							break;
 							
+						case 10: // RequestFlagPickup
+						{
+							float fx = reader.ReadSingle();
+							float fy = reader.ReadSingle();
+							float fz = reader.ReadSingle();
+
+							Console.WriteLine($"Client {id} is requesting to pick up the flag at ({fx}, {fy}, {fz})");
+
+							// Simple check: only allow pickup if no one currently has the flag
+							if (!Server.FlagIsHeld)
+							{
+								Server.FlagIsHeld = true;
+								Server.CurrentFlagHolderId = id;
+
+								Console.WriteLine($"Server authorizes Player {id} to take the flag");
+
+								// Broadcast pickup to all clients
+								BroadcastFlagUpdate(id, true, fx, fy, fz);
+							}
+							else
+							{
+								Console.WriteLine($"Flag is already held. Pickup denied for Player {id}");
+							}
+
+							break;
+						}
+							
 						default:
 							Console.WriteLine($"Unknown packet type: {packetType}");
 							break;
@@ -300,7 +341,6 @@ namespace GameServer
 					writer.Write(isFlagHolder);
 					writer.Write(score);
 					writer.Write(stamina);
-					// Send string length first, then string data
 					byte[] stringBytes = Encoding.UTF8.GetBytes(animationState);
 					writer.Write(stringBytes.Length);
 					writer.Write(stringBytes);

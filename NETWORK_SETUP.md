@@ -36,7 +36,7 @@ Map (or your main scene)
 ├── NetworkManager (add this)
 ├── Client (add this)
 └── UI
-    └── ConnectionStatus (optional)
+	└── ConnectionStatus (optional)
 ```
 
 #### NetworkManager Configuration:

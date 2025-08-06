@@ -7,6 +7,44 @@ using System.Net.Sockets;
 public partial class Client : Node          // ← must inherit Node
 {
 	public static Client Instance { get; private set; }
+	
+	public enum PacketType
+	{
+		Welcome = 1,
+		PlayerPosition = 2,
+		PlayerState = 3,
+		FlagUpdate = 4,
+		PlayerJoined = 5,
+		PlayerLeft = 6,
+		Attack = 7,
+		TakeHit = 8,
+		SlotRequest = 9,
+		RequestFlagPickup = 10
+	}
+	
+	public void RequestFlagPickup(Vector3 flagPosition)
+	{
+		if (_stream != null && _socket != null && _socket.Connected)
+		{
+			using (MemoryStream stream = new MemoryStream())
+			using (BinaryWriter writer = new BinaryWriter(stream))
+			{
+				writer.Write((byte)PacketType.RequestFlagPickup);  // Send packet type 10
+				writer.Write(flagPosition.X);
+				writer.Write(flagPosition.Y);
+				writer.Write(flagPosition.Z);
+
+				byte[] data = stream.ToArray();
+				SendData(data);
+			}
+			
+			GD.Print($"Requested flag pickup at {flagPosition}");
+		}
+		else
+		{
+			GD.PrintErr("Cannot send flag pickup request: not connected to server");
+		}
+	}
 
 	public override void _EnterTree()
 	{
@@ -124,7 +162,7 @@ public partial class Client : Node          // ← must inherit Node
 
 			_stream = _socket.GetStream();
 			_stream.BeginRead(_receiveBuffer, 0, BufferSize, OnReceive, null);
-			GD.Print("✅ TCP handshake done.");
+			GD.Print("TCP handshake done.");
 			NotifyConnectionSuccess();
 		}
 		catch (Exception e)
@@ -162,7 +200,7 @@ public partial class Client : Node          // ← must inherit Node
 			DisconnectFromServer();
 		}
 	}
-
+	
 	private void HandlePacket(byte[] data)
 	{
 		try

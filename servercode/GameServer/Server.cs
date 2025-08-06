@@ -12,8 +12,11 @@ namespace GameServer
 		public static Dictionary<int, Client> clients = new Dictionary<int, Client>();
 		public static int ConnectedPlayers { get; set; } = 0;
 		public static Dictionary<int, float> playerScores = new Dictionary<int, float>();
+		public static bool FlagIsHeld = false;
+		public static int CurrentFlagHolderId = -1;
 
 		private static TcpListener? tcpListener;
+
 
 		public static void Start(int _maxPlayer, int _port)
 		{
