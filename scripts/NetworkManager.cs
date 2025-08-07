@@ -197,31 +197,79 @@ public partial class NetworkManager : Node
 		}
 	}
 	
-	public void HandleFlagPickup()
+	public void HandleFlagPickup(int playerId)
 	{
-		GD.Print("NetworkManager: HandleFlagPickup called");
-		// Handle flag pickup by another player
+		GD.Print($"NetworkManager: HandleFlagPickup called for player {playerId}");
+
+		// Clear any existing holder state before assigning (except the new holder)
+		ClearAllFlagHoldersExcept(playerId);
+
+		// Find the correct CharacterBody3D that should hold the flag
+		CharacterBody3D holder = null;
+		if (playerId == _myClientId)
+		{
+			holder = GetLocalPlayer();
+		}
+		else if (_otherPlayers.ContainsKey(playerId))
+		{
+			holder = _otherPlayers[playerId];
+		}
+
+		if (holder == null)
+		{
+			GD.PrintErr($"NetworkManager: Could not find player node for id {playerId} in HandleFlagPickup");
+			return;
+		}
+
+		// Let the player take the flag (sets is_flag_holder etc.)
+		bool alreadyHolding = false;
+		try
+		{
+			alreadyHolding = (bool)holder.Get("is_flag_holder");
+		}
+		catch (Exception) { }
+		if (!alreadyHolding && holder.HasMethod("take_flag"))
+		{
+			holder.Call("take_flag");
+		}
+
+		// Update Flag node to track new holder without relying on local player name hacks
 		var flag = GetNodeOrNull("../Flag");
-		GD.Print($"NetworkManager: Flag found at ../Flag: {flag != null}");
 		if (flag == null)
 		{
 			flag = GetNodeOrNull("../Game/Flag");
-			GD.Print($"NetworkManager: Flag found at ../Game/Flag: {flag != null}");
 		}
-		if (flag != null && flag.HasMethod("handle_pickup"))
+		if (flag != null)
 		{
-			GD.Print("NetworkManager: Calling flag.handle_pickup()");
-			flag.Call("handle_pickup");
+			flag.Set("holder", holder);
+			flag.Set("is_being_held", true);
 		}
-		else
+	}
+
+	private void ClearAllFlagHoldersExcept(int keeperId)
+	{
+		// Local player
+		var localPlayer = GetLocalPlayer();
+		if (localPlayer != null && localPlayer.HasMethod("force_drop_flag") && keeperId != _myClientId)
 		{
-			GD.PrintErr("NetworkManager: Flag not found or missing handle_pickup method");
+			localPlayer.Call("force_drop_flag");
+		}
+
+		// Remote players
+		foreach (var kvp in _otherPlayers)
+		{
+			int pid = kvp.Key;
+			var other = kvp.Value;
+			if (pid != keeperId && other != null && other.HasMethod("force_drop_flag"))
+			{
+				other.Call("force_drop_flag");
+			}
 		}
 	}
 	
-	public void HandleFlagDrop(Vector3 position)
+	public void HandleFlagDrop(int playerId, Vector3 position)
 	{
-		GD.Print($"NetworkManager: HandleFlagDrop called at {position}");
+		GD.Print($"NetworkManager: HandleFlagDrop called for player {playerId} at {position}");
 		// Handle flag drop by another player
 		var flag = GetNodeOrNull("../Flag");
 		GD.Print($"NetworkManager: Flag found at ../Flag: {flag != null}");
@@ -239,6 +287,9 @@ public partial class NetworkManager : Node
 		{
 			GD.PrintErr("NetworkManager: Flag not found or missing handle_drop method");
 		}
+
+		// Ensure no lingering holders after drop – nobody should hold the flag now
+		ClearAllFlagHoldersExcept(-1);
 	}
 
 

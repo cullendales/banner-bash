@@ -259,21 +259,22 @@ public partial class Client : Node          // ← must inherit Node
 					break;
 					
 				case PacketType.FlagUpdate:
+					int flagPlayerId = reader.ReadInt32();
 					bool isPickup = reader.ReadBoolean();
 					float flagX = reader.ReadSingle();
 					float flagY = reader.ReadSingle();
 					float flagZ = reader.ReadSingle();
 					
-					GD.Print($"Received FlagUpdate packet: isPickup={isPickup}, position=({flagX}, {flagY}, {flagZ})");
+					GD.Print($"Received FlagUpdate packet: playerId={flagPlayerId}, isPickup={isPickup}, position=({flagX}, {flagY}, {flagZ})");
 					if (isPickup)
 					{
-						// Flag was picked up by someone
-						HandleFlagPickup();
+						// Flag was picked up by a player
+						HandleFlagPickup(flagPlayerId);
 					}
 					else
 					{
-						// Flag was dropped at position
-						HandleFlagDrop(new Vector3(flagX, flagY, flagZ));
+						// Flag was dropped at position by a player
+						HandleFlagDrop(flagPlayerId, new Vector3(flagX, flagY, flagZ));
 					}
 					break;
 					
@@ -476,14 +477,14 @@ public partial class Client : Node          // ← must inherit Node
 		}
 	}
 
-	private void HandleFlagPickup()
+	private void HandleFlagPickup(int playerId)
 	{
-		GD.Print("HandleFlagPickup called");
+		GD.Print($"HandleFlagPickup called for player {playerId}");
 		
 		// Use call_deferred to ensure this runs on the main thread
 		if (IsInsideTree())
 		{
-			CallDeferred(nameof(HandleFlagPickupDeferred));
+			CallDeferred(nameof(HandleFlagPickupDeferred), playerId);
 		}
 		else
 		{
@@ -491,9 +492,9 @@ public partial class Client : Node          // ← must inherit Node
 		}
 	}
 	
-	private void HandleFlagPickupDeferred()
+	private void HandleFlagPickupDeferred(int playerId)
 	{
-		GD.Print("HandleFlagPickupDeferred called");
+		GD.Print($"HandleFlagPickupDeferred called for player {playerId}");
 		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
 		
 		// Fallback: try to get NetworkManager through singleton
@@ -505,23 +506,23 @@ public partial class Client : Node          // ← must inherit Node
 		
 		if (networkManager != null)
 		{
-			GD.Print("Found NetworkManager, handling flag pickup");
-			networkManager.HandleFlagPickup();
+			GD.Print($"Found NetworkManager, handling flag pickup for player {playerId}");
+			networkManager.HandleFlagPickup(playerId);
 		}
 		else
 		{
-			GD.PrintErr("NetworkManager not found at /root/Map/Server for flag pickup");
+			GD.PrintErr($"NetworkManager not found at /root/Map/Server for flag pickup for player {playerId}");
 		}
 	}
 
-	private void HandleFlagDrop(Vector3 position)
+	private void HandleFlagDrop(int playerId, Vector3 position)
 	{
-		GD.Print($"HandleFlagDrop called at {position}");
+		GD.Print($"HandleFlagDrop called for player {playerId} at {position}");
 		
 		// Use call_deferred to ensure this runs on the main thread
 		if (IsInsideTree())
 		{
-			CallDeferred(nameof(HandleFlagDropDeferred), position);
+			CallDeferred(nameof(HandleFlagDropDeferred), playerId, position);
 		}
 		else
 		{
@@ -529,9 +530,9 @@ public partial class Client : Node          // ← must inherit Node
 		}
 	}
 	
-	private void HandleFlagDropDeferred(Vector3 position)
+	private void HandleFlagDropDeferred(int playerId, Vector3 position)
 	{
-		GD.Print($"HandleFlagDropDeferred called at {position}");
+		GD.Print($"HandleFlagDropDeferred called for player {playerId} at {position}");
 		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
 		
 		// Fallback: try to get NetworkManager through singleton
@@ -543,12 +544,12 @@ public partial class Client : Node          // ← must inherit Node
 		
 		if (networkManager != null)
 		{
-			GD.Print("Found NetworkManager, handling flag drop");
-			networkManager.HandleFlagDrop(position);
+			GD.Print($"Found NetworkManager, handling flag drop for player {playerId}");
+			networkManager.HandleFlagDrop(playerId, position);
 		}
 		else
 		{
-			GD.PrintErr("NetworkManager not found at /root/Map/Server for flag drop");
+			GD.PrintErr($"NetworkManager not found at /root/Map/Server for flag drop for player {playerId}");
 		}
 	}
 
