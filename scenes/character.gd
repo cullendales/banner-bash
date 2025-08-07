@@ -75,6 +75,9 @@ func _ready() -> void:
 	look_rotation.y = rotation.y
 	look_rotation.x = head.rotation.x
 	add_to_group("players")
+	
+	# Initialize last sent position for network optimization
+	set_meta("last_sent_position", global_position)
 
 func set_can_move(value: bool) -> void:
 	can_move = value
@@ -157,10 +160,16 @@ func _physics_process(delta: float) -> void:
 	if can_move:
 		var client = get_node_or_null("/root/Client")
 		if client and client.IsServerConnected:
-			# Send position updates (every few frames to avoid spam)
-			if Engine.get_process_frames() % 10 == 0:
-				print("%s sending position packet at frame %d" % [name, Engine.get_process_frames()])
-				send_position_packet(global_position, rotation)
+			# Send position updates (more frequently for smoother movement)
+			if Engine.get_process_frames() % 3 == 0:
+				# Only send if we're moving or if position changed significantly
+				var is_moving = Input.get_vector(input_left, input_right, input_forward, input_back).length() > 0.1
+				var position_changed = global_position.distance_to(get_meta("last_sent_position", global_position)) > 0.1
+				
+				if is_moving or position_changed:
+					print("%s sending position packet at frame %d" % [name, Engine.get_process_frames()])
+					send_position_packet(global_position, rotation)
+					set_meta("last_sent_position", global_position)
 		else:
 			if Engine.get_process_frames() % 60 == 0:  # Less frequent debug output
 				print("%s: can_move=%s, client=%s, IsServerConnected=%s" % [
@@ -170,8 +179,8 @@ func _physics_process(delta: float) -> void:
 					"null" if client == null else client.IsServerConnected
 				])
 			
-			# Send state updates (less frequently)
-			if Engine.get_process_frames() % 30 == 0:
+			# Send state updates (more frequently for better synchronization)
+			if Engine.get_process_frames() % 15 == 0:
 				var current_animation = state_playback.get_current_node() if state_playback else "Idle"
 				print("%s sending state packet: hits=%d, flag=%s, score=%.1f, stamina=%.1f" % [name, current_hits, is_flag_holder, score, stamina_current])
 				send_state_packet(current_hits, is_flag_holder, score, stamina_current, current_animation)

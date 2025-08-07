@@ -21,6 +21,15 @@ var score: float = 0.0
 var stamina_max = 100
 var stamina_current = stamina_max
 
+## Network Interpolation
+var target_position: Vector3 = Vector3.ZERO
+var target_rotation: Vector3 = Vector3.ZERO
+var interpolation_time: float = 0.05  # Time to interpolate over (reduced for smoother movement)
+var interpolation_timer: float = 0.0
+var start_position: Vector3 = Vector3.ZERO
+var start_rotation: Vector3 = Vector3.ZERO
+var is_interpolating: bool = false
+
 ## Node References
 @onready var anim_tree: AnimationTree = $MeshInstance3D/Player/AnimationTree
 @onready var state_playback: AnimationNodeStateMachinePlayback = anim_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback 
@@ -34,6 +43,22 @@ func _physics_process(delta: float) -> void:
 		immunity_timer -= delta
 		if immunity_timer <= 0:
 			is_immune = false
+	
+	# Handle position interpolation
+	if is_interpolating:
+		interpolation_timer += delta
+		var t = interpolation_timer / interpolation_time
+		
+		if t >= 1.0:
+			# Interpolation complete
+			global_position = target_position
+			rotation = target_rotation
+			is_interpolating = false
+		else:
+			# Use smooth easing for more natural movement
+			var eased_t = smoothstep(0.0, 1.0, t)
+			global_position = start_position.lerp(target_position, eased_t)
+			rotation = start_rotation.lerp(target_rotation, eased_t)
 	
 	# Apply gravity
 	if has_gravity and not is_on_floor():
@@ -54,6 +79,16 @@ func set_network_state(hits: int, flag_holder: bool, player_score: float, stamin
 	# Update animation state if different
 	if state_playback and state_playback.get_current_node() != anim_state:
 		state_playback.travel(anim_state)
+
+# Smooth position update with interpolation
+func set_network_position(new_position: Vector3, new_rotation: Vector3):
+	# Start interpolation
+	start_position = global_position
+	start_rotation = rotation
+	target_position = new_position
+	target_rotation = new_rotation
+	interpolation_timer = 0.0
+	is_interpolating = true
 
 func take_hit(attacker_name: String = "Unknown"):
 	if is_immune:

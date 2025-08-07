@@ -156,8 +156,17 @@ public partial class NetworkManager : Node
 		var player = _otherPlayers[playerId];
 		if (player != null)
 		{
-			player.GlobalPosition = position;
-			player.Rotation = rotation;
+			// Use interpolation for smoother movement
+			if (player.HasMethod("set_network_position"))
+			{
+				player.Call("set_network_position", position, rotation);
+			}
+			else
+			{
+				// Fallback to direct position setting
+				player.GlobalPosition = position;
+				player.Rotation = rotation;
+			}
 		}
 	}
 	
