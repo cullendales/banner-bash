@@ -2,15 +2,31 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
+// Central manager for handling network game state and player coordination.
+// Manages the creation, updating, and removal of both local and remote players.
+// Coordinates with the Client singleton to handle network events and maintain
+// game state synchronization between all connected players.
+// Implements a singleton pattern to ensure only one NetworkManager exists.
 public partial class NetworkManager : Node
 {
+	// Singleton instance of the NetworkManager class. Ensures only one manager exists per application.
 	public static NetworkManager Instance { get; private set; }
 	
+	// PackedScene reference for creating player instances.
+	// Auto-loaded from "res://scenes/Character.tscn" if not set manually.
 	[Export] public PackedScene PlayerScene { get; set; }
 	
+	// Dictionary mapping player IDs to their CharacterBody3D instances for remote players.
+	// Local player is managed separately and accessed through GetLocalPlayer().
 	private Dictionary<int, CharacterBody3D> _otherPlayers = new Dictionary<int, CharacterBody3D>();
+	
+	// Unique identifier assigned to this client by the server.
+	// Used to distinguish between local and remote player updates.
 	private int _myClientId = -1;
 	
+	// Called when the node enters the scene tree. Initializes the singleton instance.
+	// If another instance already exists, this instance will be freed.
+	// Auto-loads the PlayerScene if not already set.
 	public override void _EnterTree()
 	{
 		GD.Print($"NetworkManager._EnterTree called. Instance: {Instance}");
@@ -31,12 +47,17 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Called when the node is ready. Logs the NetworkManager's readiness and path.
 	public override void _Ready()
 	{
 		GD.Print("NetworkManager._Ready called");
 		GD.Print($"NetworkManager is now ready at path: {GetPath()}");
 	}
 	
+	// Sets the client ID for this NetworkManager and creates the local player.
+	// Called by the Client when receiving a welcome packet from the server.
+	// Parameters:
+	//   clientId - The client ID assigned by the server
 	public void SetMyClientId(int clientId)
 	{
 		GD.Print($"NetworkManager.SetMyClientId called with {clientId}. Current ID: {_myClientId}");
@@ -50,6 +71,11 @@ public partial class NetworkManager : Node
 		// The server will send PlayerJoined packets to all clients
 	}
 	
+	// Creates a local player instance for this client.
+	// Removes any existing local player before creating a new one.
+	// Sets the player's initial position based on client ID and enables movement.
+	// Parameters:
+	//   clientId - The client ID for which to create the local player
 	private void CreateLocalPlayer(int clientId)
 	{
 		GD.Print($"CreateLocalPlayer called for client {clientId}");
@@ -99,6 +125,13 @@ public partial class NetworkManager : Node
 		GD.Print($"Created local player for client {clientId} at {spawnPosition}");
 	}
 	
+	// Determines the spawn position for a player based on their client ID.
+	// Provides predefined positions for clients 1-8 and random positions for additional clients.
+	// Ensures players are spread out across the map to avoid spawning conflicts.
+	// Parameters:
+	//   clientId - The client ID for which to determine spawn position
+	// Returns:
+	//   The spawn position as a Vector3
 	private Vector3 GetSpawnPosition(int clientId)
 	{
 		Vector3 spawnPos;
@@ -143,6 +176,13 @@ public partial class NetworkManager : Node
 		return spawnPos;
 	}
 	
+	// Updates the position and rotation of a remote player.
+	// Creates the player if they don't exist, then updates their position using
+	// network interpolation for smooth movement.
+	// Parameters:
+	//   playerId - ID of the player to update
+	//   position - New position of the player
+	//   rotation - New rotation of the player
 	public void UpdatePlayerPosition(int playerId, Vector3 position, Vector3 rotation)
 	{
 		if (playerId == _myClientId) return; // Don't update our own player
@@ -170,6 +210,16 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Updates the state of a remote player (health, flag status, score, stamina, animation).
+	// Creates the player if they don't exist, then updates their state.
+	// Also updates the HUD with the new score information.
+	// Parameters:
+	//   playerId - ID of the player to update
+	//   hits - Number of hits the player has taken
+	//   isFlagHolder - Whether the player is holding the flag
+	//   score - Player's current score
+	//   stamina - Player's current stamina
+	//   animationState - Current animation state of the player
 	public void UpdatePlayerState(int playerId, int hits, bool isFlagHolder, float score, float stamina, string animationState)
 	{
 		if (playerId == _myClientId) return; // Don't update our own player
@@ -206,6 +256,11 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Handles flag pickup events for a specific player.
+	// Clears any existing flag holders before assigning the flag to the new holder.
+	// Updates both the player's flag holder status and the flag node's tracking.
+	// Parameters:
+	//   playerId - ID of the player who picked up the flag
 	public void HandleFlagPickup(int playerId)
 	{
 		GD.Print($"NetworkManager: HandleFlagPickup called for player {playerId}");
@@ -255,6 +310,10 @@ public partial class NetworkManager : Node
 		}
 	}
 
+	// Clears the flag holder status from all players except the specified keeper.
+	// Ensures only one player can hold the flag at a time.
+	// Parameters:
+	//   keeperId - ID of the player who should keep the flag (or -1 for no keeper)
 	private void ClearAllFlagHoldersExcept(int keeperId)
 	{
 		// Local player
@@ -276,6 +335,12 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Handles flag drop events for a specific player.
+	// Updates the flag node to handle the drop at the specified position.
+	// Clears all flag holder status to ensure no lingering holders.
+	// Parameters:
+	//   playerId - ID of the player who dropped the flag
+	//   position - Position where the flag was dropped
 	public void HandleFlagDrop(int playerId, Vector3 position)
 	{
 		GD.Print($"NetworkManager: HandleFlagDrop called for player {playerId} at {position}");
@@ -301,8 +366,11 @@ public partial class NetworkManager : Node
 		ClearAllFlagHoldersExcept(-1);
 	}
 
-
-	
+	// Handles player attack events from remote players.
+	// Checks if the local player is within attack range and applies damage if hit.
+	// Parameters:
+	//   attackerId - ID of the player who attacked
+	//   attackPosition - Position where the attack occurred
 	public void HandlePlayerAttack(int attackerId, Vector3 attackPosition)
 	{
 		if (attackerId == _myClientId) return; // Don't handle our own attack
@@ -326,6 +394,11 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Handles player take hit events for remote players.
+	// Applies damage to the specified remote player if they exist.
+	// Parameters:
+	//   playerId - ID of the player who took damage
+	//   damage - Amount of damage taken
 	public void HandlePlayerTakeHit(int playerId, int damage)
 	{
 		if (playerId == _myClientId) return; // Don't handle our own hit
@@ -340,6 +413,11 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Creates a remote player instance for the specified player ID.
+	// Sets the player's initial position and disables movement (controlled by network).
+	// Adds the player to the scene and stores it in the _otherPlayers dictionary.
+	// Parameters:
+	//   playerId - ID of the player to create
 	private void CreateOtherPlayer(int playerId)
 	{
 		GD.Print($"CreateOtherPlayer called for player {playerId}");
@@ -382,6 +460,10 @@ public partial class NetworkManager : Node
 		GD.Print($"Created other player: {playerId} at {spawnPosition}");
 	}
 	
+	// Removes a remote player from the game.
+	// Frees the player node and removes it from the _otherPlayers dictionary.
+	// Parameters:
+	//   playerId - ID of the player to remove
 	public void RemovePlayer(int playerId)
 	{
 		if (_otherPlayers.ContainsKey(playerId))
@@ -396,6 +478,8 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Removes all remote players from the game.
+	// Frees all player nodes and clears the _otherPlayers dictionary.
 	public void ClearAllPlayers()
 	{
 		foreach (var player in _otherPlayers.Values)
@@ -408,6 +492,11 @@ public partial class NetworkManager : Node
 		_otherPlayers.Clear();
 	}
 	
+	// Handles player joined events from the server.
+	// Creates a remote player instance if the joined player is not the local player.
+	// Parameters:
+	//   playerId - ID of the player who joined
+	//   totalPlayers - Total number of players in the game
 	public void HandlePlayerJoined(int playerId, int totalPlayers)
 	{
 		GD.Print($"Player {playerId} joined. Total players: {totalPlayers}");
@@ -419,17 +508,23 @@ public partial class NetworkManager : Node
 		}
 	}
 	
+	// Gets the local player's CharacterBody3D instance.
+	// Returns: The local player's CharacterBody3D, or null if not found
 	public CharacterBody3D GetLocalPlayer()
 	{
 		// Return the local player character
 		return GetNodeOrNull<CharacterBody3D>("../Character");
 	}
 	
+	// Gets the client ID assigned to this NetworkManager.
+	// Returns: The client ID, or -1 if not set
 	public int GetMyClientId()
 	{
 		return _myClientId;
 	}
 	
+	// Gets the dictionary of remote players managed by this NetworkManager.
+	// Returns: Dictionary mapping player IDs to their CharacterBody3D instances
 	public Dictionary<int, CharacterBody3D> GetOtherPlayers()
 	{
 		return _otherPlayers;

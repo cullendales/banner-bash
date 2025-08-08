@@ -1,14 +1,29 @@
 using Godot;
 using System;
 
+
+// Displays connection progress, status messages, and provides retry functionality.
+// Updates frequently (10 times per second) to provide responsive user feedback
+// during connection attempts and status changes.
 public partial class ConnectionUI : Control
 {
+	// Label component that displays the current connection status message.
 	[Export] public Label StatusLabel { get; set; }
+	
+	// Progress bar component that visually indicates connection progress.
 	[Export] public ProgressBar ConnectionProgress { get; set; }
+	
+	// Button component that allows users to retry connection attempts.
+	// Only visible when connection fails or is not established.
 	[Export] public Button RetryButton { get; set; }
 	
+	// Timer used to frequently update the connection status display.
+	// Updates 10 times per second to provide responsive user feedback.
 	private Godot.Timer _updateTimer;
 	
+	// Called when the node is ready. Initializes the update timer and retry button.
+	// Sets up a high-frequency timer for responsive UI updates and configures
+	// the retry button for user interaction.
 	public override void _Ready()
 	{
 		// Setup update timer
@@ -28,6 +43,9 @@ public partial class ConnectionUI : Control
 		UpdateStatus("Ready to connect");
 	}
 	
+	// Timer callback method that checks the current connection status and updates the UI accordingly.
+	// Called 10 times per second to provide responsive feedback. Updates status text,
+	// progress bar value, and retry button visibility based on connection state.
 	private void OnUpdateTimer()
 	{
 		if (Client.Instance != null && Client.Instance.IsServerConnected)
@@ -62,6 +80,8 @@ public partial class ConnectionUI : Control
 		UpdateStatus("Retry pressed - implement retry logic");
 	}
 	
+	// Updates the status label with the provided status message.
+	// Directly sets the text of the StatusLabel component if it exists.
 	public void UpdateStatus(string status)
 	{
 		if (StatusLabel != null)
@@ -69,7 +89,8 @@ public partial class ConnectionUI : Control
 			StatusLabel.Text = status;
 		}
 	}
-	
+
+	// Called by the Client when a connection attempt is initiated.
 	public void ShowConnecting()
 	{
 		UpdateStatus("Connecting...");
@@ -79,6 +100,8 @@ public partial class ConnectionUI : Control
 		}
 	}
 	
+	// Shows the "Connected!" status and sets progress bar to 100%.
+	// Called by the Client when a successful connection is established.
 	public void ShowConnected()
 	{
 		UpdateStatus("Connected!");
@@ -88,6 +111,11 @@ public partial class ConnectionUI : Control
 		}
 	}
 	
+	// Shows an error status with the provided error message.
+	// Sets progress bar to 0% and makes the retry button visible.
+	// Called by the Client when a connection attempt fails.
+	// Parameters:
+	//   error - The error message to display
 	public void ShowError(string error)
 	{
 		UpdateStatus($"Error: {error}");
