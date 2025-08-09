@@ -1,4 +1,5 @@
 # Banner Bash
+<img width="867" height="515" alt="Screenshot 2025-08-09 at 8 52 24 AM" src="https://github.com/user-attachments/assets/a1d5ed16-acdb-4ee4-911f-715dd7894746" />
 
 ## About
 
