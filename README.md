@@ -26,9 +26,11 @@ Be sure to download the .net version.
 3. Launch Godot_mono (the .net version) and select banner-bash as your game
 4. In the upper right hand corner, click the play button and wait while the game builds and launches
 5. A screen will load asking for IP address and port number
-   a. If playing on your local machine without connecting with other players, simply clicking join will allow you to enter the game
-   b. If connecting with other players online, every player must enter the IP address of the player who launched the server and the port number 7777 before clicking join.
-6. The game will begin. Have fun!
+   
+   i. If playing on your local machine without connecting with other players, simply clicking join will allow you to enter the game
+   
+   ii. If connecting with other players online, every player must enter the IP address of the player who launched the server and the port number 7777 before clicking join.
+7. The game will begin. Have fun!
 
 ## Notes
 
