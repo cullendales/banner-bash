@@ -1,93 +1,98 @@
 extends Area3D
 
-# Flag game object that can be picked up and carried by players.
-# Handles both local pickup/drop events and network synchronization.
-# The flag follows the holder player with a specific offset when being carried.
+# The networked flag. Requests pickup on local touch; follows holder when server says so.
 
-# Reference to the player currently holding the flag (null if not held)
-var holder = null
+var holder: Node3D = null
+var is_being_held := false
 
-# Flag indicating whether the flag is currently being held by a player
-var is_being_held = false
+# pickup block so the dropper doesn't immediately re-pickup 
+var _blocked_id := -1
+var _pickup_block_until := 0.0  # seconds
 
 func _ready():
-	# Connect to body entered signal to detect when players touch the flag
+	monitoring = true
+	monitorable = true
 	body_entered.connect(_on_body_entered)
 	visible = true
 
-func _process(delta):
-	# Update flag position and visibility every frame
-	if holder and holder.is_flag_holder:
-		# Flag is being held - make it visible and follow the holder
+func _process(_delta):
+	# Follow holder
+	if holder != null:
 		visible = true
-		# How far behind and how high above the player's origin:
 		var back_dist: float = -0.5
 		var up_dist: float = 0.2
-		
-		# Build an offset transform for the flag position relative to the holder
-		var offset = Transform3D.IDENTITY
+		var offset := Transform3D.IDENTITY
 		offset.origin = Vector3(0, up_dist, -back_dist)
-		
-		# Multiply the player's global transform (rotation + position) by the offset
 		global_transform = holder.global_transform * offset
 	else:
-		# Flag is not being held - show it at its current position
-		if is_being_held:
-			# Clear held state if holder is no longer valid
-			is_being_held = false
-			holder = null
+		is_being_held = false
+		visible = true
 
-# Original version with network synchronization
-# Called when a body (player) enters the flag's area
-func _on_body_entered(body):
-	# Only allow pickup if flag is not already held and body can take flags
-	if not is_being_held and body.has_method("take_flag") and not body.is_flag_holder:
-		body.take_flag()
-		holder = body
-		is_being_held = true
-
-# Called when flag is dropped locally by the current holder
-# Sets the flag to the specified position and clears holder state
-func drop_at_position(position: Vector3):
-	holder = null
-	is_being_held = false
-	global_position = position
-	visible = true
-
-# Network synchronization methods
-
-# Handles flag pickup events from network (called by NetworkManager)
-# Attempts to find the local player and give them the flag
-func handle_pickup():
-	if is_being_held:
-		print("Flag already held, skipping pickup.")
+func _on_body_entered(body: Node):
+	if holder != null:
 		return
-	
-	# Try to find the GameManager to get local player information
-	var game_manager = get_tree().get_current_scene().get_node_or_null("GameManager")
-	if game_manager == null:
-		print("GameManager not found in handle_pickup()")
-		return
-	
-	# Get the local player's name from the game manager
-	var local_player_name = game_manager.local_player_name
-	var player = get_tree().get_current_scene().get_node_or_null(local_player_name)
-	
-	# If local player exists and can take flags, give them the flag
-	if player and player.has_method("take_flag"):
-		print("Flag: handle_pickup -> calling take_flag on ", player.name)
-		player.take_flag()
-		holder = player
-		is_being_held = true
+
+	# Only players can request pickup
+	if body != null and body.is_in_group("players") and body.has_method("take_flag"):
+		# Block the last dropper for a short window after a drop
+		var now := float(Time.get_ticks_msec()) / 1000.0
+		var pid := -1
+		if body.has_method("get_player_id"):
+			pid = body.get_player_id()
+		if pid == _blocked_id and now < _pickup_block_until:
+			return
+
+		# Only allow the local controller to request
+		var can := false
+		if body.has_method("get"):
+			var v = body.get("can_move")
+			if typeof(v) == TYPE_BOOL:
+				can = v
+		if can:
+			body.take_flag()
+
+# --- From server (authoritative) ---
+func apply_server_update(holder_id: int, is_pickup: bool, world_pos: Vector3):
+	if is_pickup:
+		# Clear block once someone has it
+		_blocked_id = -1
+		_pickup_block_until = 0.0
+		var p := _find_player_by_id(holder_id)
+		if p == null:
+			push_warning("Flag: holder %s not found yet; will attach when available" % holder_id)
+			# Defer attach until player spawns
+			call_deferred("_attach_later", holder_id)
+			return
+		_attach_player(p)
 	else:
-		print("Local player not found or missing take_flag method")
+		# Dropped by holder_id → block that id for a moment to avoid instant re-pickup
+		_blocked_id = holder_id
+		_pickup_block_until = float(Time.get_ticks_msec()) / 1000.0 + 0.6
+		_detach_to_world(world_pos)
 
-# Handles flag drop events from network (called by NetworkManager)
-# Sets the flag to the specified position and clears holder state
-func handle_drop(position: Vector3):
-	# Handle flag being dropped by another player
+func _attach_later(holder_id:int):
+	var p := _find_player_by_id(holder_id)
+	if p != null:
+		_attach_player(p)
+
+func _attach_player(p: Node3D):
+	holder = p
+	is_being_held = true
+	var back_dist: float = -0.5
+	var up_dist: float = 0.2
+	var offset := Transform3D.IDENTITY
+	offset.origin = Vector3(0, up_dist, -back_dist)
+	global_transform = p.global_transform * offset
 	visible = true
+
+func _detach_to_world(pos: Vector3):
 	holder = null
 	is_being_held = false
-	global_position = position
-	print("Flag was dropped by another player at: ", position)
+	global_position = pos
+	visible = true
+
+func _find_player_by_id(pid: int) -> Node3D:
+	for n in get_tree().get_nodes_in_group("players"):
+		if n.has_method("get_player_id") and n.get_player_id() == pid:
+			return n
+	return null
