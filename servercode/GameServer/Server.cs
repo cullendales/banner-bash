@@ -15,6 +15,9 @@ namespace GameServer
 		public static bool FlagIsHeld = false;
 		public static int CurrentFlagHolderId = -1;
 
+		// Timer is initialised in Start(), so mark it nullable to satisfy the nullable analyser
+		private static System.Timers.Timer? _scoreTimer;
+
 		private static TcpListener? tcpListener;
 
 
@@ -31,6 +34,12 @@ namespace GameServer
 			tcpListener.BeginAcceptTcpClient(new AsyncCallback(TCPConnectCallback), null);
 
 			Console.WriteLine($"Server started on port {Port}.");
+
+			// Start periodic score timer (1 second)
+			_scoreTimer = new System.Timers.Timer(1000);
+			_scoreTimer.Elapsed += (s,e) => ScoreTick();
+			_scoreTimer.AutoReset = true;
+			_scoreTimer.Start();
 		}
 
 		private static void TCPConnectCallback(IAsyncResult _result)
@@ -47,9 +56,10 @@ namespace GameServer
 			for (int i = 1; i <= MaxPlayers; i++)
 			{
 				// Check if the slot is available (socket is null or not connected)
-				if (clients[i].tcp.socket == null || !clients[i].tcp.socket.Connected)
+				// Using null-conditional operator avoids CS8602
+				if (clients[i].tcp.socket?.Connected != true)
 				{
-					Console.WriteLine($"Found available slot {i}. Socket null: {clients[i].tcp.socket == null}, Connected: {(clients[i].tcp.socket != null ? clients[i].tcp.socket.Connected : false)}");
+					Console.WriteLine($"Found available slot {i}. Socket null: {clients[i].tcp.socket == null}, Connected: {clients[i].tcp.socket?.Connected ?? false}");
 					
 					// If socket exists but is not connected, clean it up
 					if (clients[i].tcp.socket != null)
@@ -87,7 +97,7 @@ namespace GameServer
 			Console.WriteLine("\n=== PLAYER SCORES ===");
 			foreach (var kvp in playerScores)
 			{
-				if (clients.ContainsKey(kvp.Key) && clients[kvp.Key].tcp.socket != null && clients[kvp.Key].tcp.socket.Connected)
+				if (clients.TryGetValue(kvp.Key, out var cl) && cl.tcp.socket?.Connected == true)
 				{
 					Console.WriteLine($"Player {kvp.Key}: {kvp.Value:F1} points");
 				}
@@ -104,6 +114,57 @@ namespace GameServer
 			}
 		}
 
+		private static void ScoreTick()
+		{
+			if (FlagIsHeld && CurrentFlagHolderId != -1)
+			{
+				if (!playerScores.ContainsKey(CurrentFlagHolderId))
+					playerScores[CurrentFlagHolderId] = 0;
+
+				playerScores[CurrentFlagHolderId] += 1;
+
+				BroadcastPlayerScore(CurrentFlagHolderId, playerScores[CurrentFlagHolderId]);
+
+				if (playerScores[CurrentFlagHolderId] >= 100)
+				{
+					BroadcastGameWon(CurrentFlagHolderId);
+					Console.WriteLine($"Player {CurrentFlagHolderId} wins! Resetting match.");
+
+					FlagIsHeld = false;
+					CurrentFlagHolderId = -1;
+				}
+			}
+		}
+
+		private static void BroadcastPlayerScore(int pid, float score)
+		{
+			using var ms = new System.IO.MemoryStream();
+			using var w = new System.IO.BinaryWriter(ms);
+			w.Write((byte)12); // PlayerScore
+			w.Write(pid);
+			w.Write(score);
+			byte[] data = ms.ToArray();
+			BroadcastToAll(data);
+		}
+
+		private static void BroadcastGameWon(int winnerId)
+		{
+			using var ms = new System.IO.MemoryStream();
+			using var w = new System.IO.BinaryWriter(ms);
+			w.Write((byte)13); // GameWon
+			w.Write(winnerId);
+			byte[] data = ms.ToArray();
+			BroadcastToAll(data);
+		}
+
+		private static void BroadcastToAll(byte[] data)
+		{
+			foreach (var c in clients.Values)
+			{
+				if (c.tcp.socket?.Connected == true)
+					c.tcp.SendData(data);
+			}
+		}
 
 	}
 }

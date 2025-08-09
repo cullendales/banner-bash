@@ -76,54 +76,50 @@ public partial class NetworkManager : Node
 	// Sets the player's initial position based on client ID and enables movement.
 	// Parameters:
 	//   clientId - The client ID for which to create the local player
-	private void CreateLocalPlayer(int clientId)
+	public void CreateLocalPlayer(int clientId)
 	{
-		GD.Print($"CreateLocalPlayer called for client {clientId}");
-		
-		if (PlayerScene == null)
+		GD.Print($"NetworkManager: Creating local player for client ID {clientId}");
+
+		// Prefer the exported scene; fallback to the same path you used in _EnterTree
+		var scene = PlayerScene ?? GD.Load<PackedScene>("res://scenes/Character.tscn");
+		if (scene == null)
 		{
-			GD.PrintErr("PlayerScene not set in NetworkManager!");
+			GD.PrintErr("CreateLocalPlayer: PlayerScene is null and fallback load failed.");
 			return;
 		}
-		
-		// Remove any existing local player
-		var existingPlayer = GetNodeOrNull("../Character");
-		if (existingPlayer != null)
-		{
-			GD.Print("Removing existing local player");
-			existingPlayer.QueueFree();
-		}
-		
-		// Create new local player
-		var newPlayer = PlayerScene.Instantiate<CharacterBody3D>();
-		newPlayer.Name = $"Character"; // Keep the same name for compatibility
-		
-		// Set initial position based on client ID
-		var spawnPosition = GetSpawnPosition(clientId);
-		newPlayer.GlobalPosition = spawnPosition;
-		
-		// Enable movement for local player
-		if (newPlayer.HasMethod("set_can_move"))
-		{
-			GD.Print($"Calling set_can_move(true) on local player {newPlayer.Name}");
-			newPlayer.Call("set_can_move", true);
-		}
+
+		var newPlayer = scene.Instantiate<CharacterBody3D>();
+		newPlayer.Name = "Character";
+
+		// Spawn position based on id so both clients don’t overlap
+		newPlayer.GlobalPosition = GetSpawnPosition(clientId);
+
+		if (newPlayer.HasMethod("set_player_id"))
+			newPlayer.Call("set_player_id", clientId);
 		else
-		{
-			GD.PrintErr($"Local player {newPlayer.Name} does not have set_can_move method!");
-		}
-		
-		// Add to the scene
-		GetParent().AddChild(newPlayer);
-		
-		// Capture mouse for local player
+			newPlayer.Set("player_id", clientId);
+
+		// Local player can move
+		if (newPlayer.HasMethod("set_can_move"))
+			newPlayer.Call("set_can_move", true);
+
+		var gameNode = GetNodeOrNull<Node3D>("/root/Map/Game");
+		if (gameNode != null) gameNode.AddChild(newPlayer);
+		else GetParent().AddChild(newPlayer);
+
+		// Capture mouse if the script exposes it
 		if (newPlayer.HasMethod("capture_mouse"))
-		{
 			newPlayer.Call("capture_mouse");
-		}
-		
-		GD.Print($"Created local player for client {clientId} at {spawnPosition}");
+
+		// Track my id
+		_myClientId = clientId;
+
+		if (!_otherPlayers.ContainsKey(clientId))
+			_otherPlayers[clientId] = newPlayer;
+
+		GD.Print("NetworkManager: Local player created and assigned player_id");
 	}
+
 	
 	// Determines the spawn position for a player based on their client ID.
 	// Provides predefined positions for clients 1-8 and random positions for additional clients.
@@ -237,23 +233,42 @@ public partial class NetworkManager : Node
 			GD.Print($"NetworkManager: Calling set_network_state for player {playerId} with isFlagHolder={isFlagHolder}");
 			player.Call("set_network_state", hits, isFlagHolder, score, stamina, animationState);
 		}
-		
-		// Update HUD with the new score
+	}
+
+	public void UpdatePlayerScore(int playerId,float score)
+	{
+		// Update node property so any local UI bound to it sees the change
+		if (playerId == _myClientId)
+		{
+			var me = GetLocalPlayer();
+			if (me != null) me.Set("score", score);
+		}
+		else if (_otherPlayers.TryGetValue(playerId, out var other) && other != null)
+		{
+			other.Set("score", score);
+		}
+
+		// Update HUD (single source of truth)
 		var hud = GetNodeOrNull<CanvasLayer>("/root/Map/HUD");
-		GD.Print($"NetworkManager: HUD found: {hud != null}");
-		if (hud != null)
-		{
-			GD.Print($"NetworkManager: HUD has update_player_score method: {hud.HasMethod("update_player_score")}");
-			if (hud.HasMethod("update_player_score"))
-			{
-				GD.Print($"NetworkManager: Calling update_player_score for player {playerId} with score {score}");
-				hud.Call("update_player_score", playerId, score);
-			}
-		}
-		else
-		{
-			GD.PrintErr("NetworkManager: HUD not found at /root/Map/HUD");
-		}
+		if (hud!=null && hud.HasMethod("update_player_score"))
+			hud.Call("update_player_score",playerId,score);
+	}
+
+
+	public void HandleGameWon(int winnerId)
+	{
+		GD.Print($"HandleGameWon: player {winnerId} wins!");
+		// Simple: pause game and show label
+		GetTree().Paused = true;
+
+		var winLabel = new Label();
+		winLabel.Text = winnerId==_myClientId?"You Win!":"Player "+winnerId+" Wins!";
+		winLabel.AddThemeColorOverride("font_color",new Color(1,1,0));
+		winLabel.Scale = new Vector2(4,4);
+		var root = GetTree().Root;
+		root.AddChild(winLabel);
+		winLabel.AnchorLeft=0.5f; winLabel.AnchorTop=0.5f;
+		winLabel.OffsetLeft=-200; winLabel.OffsetTop=-50;
 	}
 	
 	// Handles flag pickup events for a specific player.
@@ -265,19 +280,9 @@ public partial class NetworkManager : Node
 	{
 		GD.Print($"NetworkManager: HandleFlagPickup called for player {playerId}");
 
-		// Clear any existing holder state before assigning (except the new holder)
-		ClearAllFlagHoldersExcept(playerId);
-
-		// Find the correct CharacterBody3D that should hold the flag
 		CharacterBody3D holder = null;
-		if (playerId == _myClientId)
-		{
-			holder = GetLocalPlayer();
-		}
-		else if (_otherPlayers.ContainsKey(playerId))
-		{
-			holder = _otherPlayers[playerId];
-		}
+		if (playerId == _myClientId) holder = GetLocalPlayer();
+		else if (_otherPlayers.ContainsKey(playerId)) holder = _otherPlayers[playerId];
 
 		if (holder == null)
 		{
@@ -285,42 +290,44 @@ public partial class NetworkManager : Node
 			return;
 		}
 
-		// Let the player take the flag (sets is_flag_holder etc.)
-		bool alreadyHolding = false;
-		try
-		{
-			alreadyHolding = (bool)holder.Get("is_flag_holder");
-		}
-		catch (Exception) { }
-		if (!alreadyHolding && holder.HasMethod("take_flag"))
-		{
-			holder.Call("take_flag");
-		}
+		// Clear locals
+		ClearAllFlagHoldersExcept(playerId);
 
-		// Update Flag node to track new holder without relying on local player name hacks
-		var flag = GetNodeOrNull("../Flag");
-		if (flag == null)
-		{
-			flag = GetNodeOrNull("../Game/Flag");
-		}
+		// Mark this player as holder locally
+		if (holder.HasMethod("set_flag_holder")) holder.Call("set_flag_holder", true);
+		else holder.Set("is_flag_holder", true);
+
+		// Update Flag bookkeeping
+		var flag = GetNodeOrNull("../Flag") ?? GetNodeOrNull("../Game/Flag");
 		if (flag != null)
 		{
 			flag.Set("holder", holder);
 			flag.Set("is_being_held", true);
+
+			// Make the GDScript snap behind the holder right now
+			flag.CallDeferred("apply_server_update", playerId, true, holder.GlobalPosition);
+			GD.Print($"HandleFlagPickup → Set holder on {flag.GetPath()} to {holder.Name}");
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager: Flag node not found while handling pickup");
 		}
 	}
 
-	// Clears the flag holder status from all players except the specified keeper.
-	// Ensures only one player can hold the flag at a time.
-	// Parameters:
-	//   keeperId - ID of the player who should keep the flag (or -1 for no keeper)
+
 	private void ClearAllFlagHoldersExcept(int keeperId)
 	{
 		// Local player
 		var localPlayer = GetLocalPlayer();
-		if (localPlayer != null && localPlayer.HasMethod("force_drop_flag") && keeperId != _myClientId)
+		if (localPlayer != null)
 		{
-			localPlayer.Call("force_drop_flag");
+			if (keeperId != _myClientId)
+			{
+				if (localPlayer.HasMethod("set_flag_holder"))
+					localPlayer.Call("set_flag_holder", false);
+				else
+					localPlayer.Set("is_flag_holder", false);
+			}
 		}
 
 		// Remote players
@@ -328,12 +335,15 @@ public partial class NetworkManager : Node
 		{
 			int pid = kvp.Key;
 			var other = kvp.Value;
-			if (pid != keeperId && other != null && other.HasMethod("force_drop_flag"))
-			{
-				other.Call("force_drop_flag");
-			}
+			if (pid == keeperId || other == null) continue;
+
+			if (other.HasMethod("set_flag_holder"))
+				other.Call("set_flag_holder", false);
+			else
+				other.Set("is_flag_holder", false);
 		}
 	}
+
 	
 	// Handles flag drop events for a specific player.
 	// Updates the flag node to handle the drop at the specified position.
@@ -401,17 +411,27 @@ public partial class NetworkManager : Node
 	//   damage - Amount of damage taken
 	public void HandlePlayerTakeHit(int playerId, int damage)
 	{
-		if (playerId == _myClientId) return; // Don't handle our own hit
-		
-		if (_otherPlayers.ContainsKey(playerId))
+	if (playerId == _myClientId)
+	{
+		var my = GetLocalPlayer();
+		if (my != null && my.HasMethod("take_hit"))
 		{
-			var player = _otherPlayers[playerId];
-			if (player != null && player.HasMethod("take_hit"))
-			{
-				player.Call("take_hit", "Network");
-			}
+			my.Call("take_hit", "Network"); 
+		}
+		return;
+	}
+
+	// Otherwise, apply to remote player if we have them
+	if (_otherPlayers.ContainsKey(playerId))
+	{
+		var other = _otherPlayers[playerId];
+		if (other != null && other.HasMethod("take_hit"))
+		{
+			other.Call("take_hit", "Network");
 		}
 	}
+}
+
 	
 	// Creates a remote player instance for the specified player ID.
 	// Sets the player's initial position and disables movement (controlled by network).
@@ -437,6 +457,12 @@ public partial class NetworkManager : Node
 		
 		var newPlayer = PlayerScene.Instantiate<CharacterBody3D>();
 		newPlayer.Name = $"Player{playerId}";
+		// Set player_id so Flag.gd can find this player by id
+		if (newPlayer.HasMethod("set_player_id"))
+			newPlayer.Call("set_player_id", playerId);
+		else
+			newPlayer.Set("player_id", playerId);
+
 		
 		// Set initial position based on client ID
 		var spawnPosition = GetSpawnPosition(playerId);
@@ -507,13 +533,38 @@ public partial class NetworkManager : Node
 			CreateOtherPlayer(playerId);
 		}
 	}
+
+	public void ApplyFlagUpdate(int holderId, bool isPickup, Vector3 worldPos)
+	{
+		if (isPickup) HandleFlagPickup(holderId);
+		else HandleFlagDrop(holderId, worldPos);
+	}
+
 	
 	// Gets the local player's CharacterBody3D instance.
 	// Returns: The local player's CharacterBody3D, or null if not found
 	public CharacterBody3D GetLocalPlayer()
 	{
-		// Return the local player character
-		return GetNodeOrNull<CharacterBody3D>("../Character");
+		// Attempt 1: original relative path (Map/Character)
+		var player = GetNodeOrNull<CharacterBody3D>("../Character");
+		if (player != null) return player;
+
+		// Attempt 2: when Character is a child of the Game node (Map/Game/Character)
+		player = GetNodeOrNull<CharacterBody3D>("../Game/Character");
+		if (player != null) return player;
+
+		// Attempt 3: search the "players" group for a node whose player_id matches this client
+		foreach (var node in GetTree().GetNodesInGroup("players"))
+		{
+			if (node is CharacterBody3D c && node.HasMethod("get_player_id"))
+			{
+				int pid = (int)node.Call("get_player_id");
+				if (pid == _myClientId)
+					return c;
+			}
+		}
+
+		return null; // Not found
 	}
 	
 	// Gets the client ID assigned to this NetworkManager.
