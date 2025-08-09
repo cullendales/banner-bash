@@ -1,16 +1,32 @@
-[gd_scene load_steps=4 format=3 uid="uid://tqjv7mfgiixx"]
+[gd_scene load_steps=6 format=3 uid="uid://4pb0ssoa5d03"]
 
 [ext_resource type="Script" uid="uid://d61eus3sukvt" path="res://scripts/Flag.gd" id="1_l1sgl"]
 
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_l1sgl"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_76ss4"]
 
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_amn8n"]
+[sub_resource type="CylinderMesh" id="CylinderMesh_76ss4"]
+top_radius = 0.05
+bottom_radius = 0.05
+height = 2.5
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_76ss4"]
+size = Vector2(1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_76ss4"]
+cull_mode = 2
 
 [node name="Area3D" type="Area3D"]
 script = ExtResource("1_l1sgl")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-shape = SubResource("CylinderShape3D_l1sgl")
+transform = Transform3D(1.2, 0, 0, 0, 1.19998, 0.00668109, 0, -0.00668109, 1.19998, 0, 0, 0)
+shape = SubResource("BoxShape3D_76ss4")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-mesh = SubResource("CapsuleMesh_amn8n")
+[node name="flag" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("CylinderMesh_76ss4")
+
+[node name="cloth" type="MeshInstance3D" parent="."]
+transform = Transform3D(-4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0, 1, -0.0375817, 1.72754, 0.543934)
+mesh = SubResource("PlaneMesh_76ss4")
+surface_material_override/0 = SubResource("StandardMaterial3D_76ss4")

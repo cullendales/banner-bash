@@ -11,9 +11,13 @@ config_version=5
 [application]
 
 config/name="banner-bash"
-run/main_scene="uid://bghjiufqgdsme"
-config/features=PackedStringArray("4.4", "Forward Plus")
+run/main_scene="uid://b8bku5yjpgtpb"
+config/features=PackedStringArray("4.4", "C#", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+Client="*res://scripts/Client.cs"
 
 [dotnet]
 

@@ -1,0 +1,44 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8bku5yjpgtpb"]
+
+[ext_resource type="Script" uid="uid://c11sd82ty3vhe" path="res://scenes/GameManager.cs" id="1_yqorp"]
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_yqorp")
+
+[node name="Join" type="Button" parent="."]
+layout_mode = 0
+offset_left = 279.0
+offset_top = 100.0
+offset_right = 436.0
+offset_bottom = 173.0
+text = "JOIN"
+
+[node name="IP" type="LineEdit" parent="."]
+layout_mode = 0
+offset_left = 279.0
+offset_top = 177.0
+offset_right = 436.0
+offset_bottom = 208.0
+placeholder_text = "IP"
+
+[node name="Port" type="LineEdit" parent="."]
+layout_mode = 0
+offset_left = 280.0
+offset_top = 213.0
+offset_right = 436.0
+offset_bottom = 244.0
+placeholder_text = "Port"
+
+[node name="StatusLabel" type="Label" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+
+[node name="ConnectionUI" type="Label" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
