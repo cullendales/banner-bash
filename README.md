@@ -32,6 +32,13 @@ Be sure to download the .net version.
    ii. If connecting with other players online, every player must enter the IP address of the player who launched the server and the port number 7777 before clicking join.
 7. The game will begin. Have fun!
 
+##Controls
+W / A / S / D - Move around.
+Shift + Move - Sprint (hold Shift while moving).
+C - Crouch.
+G - Drop your flag.
+Left Click - Push nearby players; 3 pushes make them drop their flag.
+
 ## Notes
 
 This game was developed to show socket programming. No existing gaming, client-server, messaging, remote calling, or other middleware or frameworks were used. All code was written froms scratch.
