@@ -25,7 +25,10 @@ public partial class Client : Node          // ← must inherit Node
 		Attack = 7,           // Player attack event
 		TakeHit = 8,          // Player taking damage
 		SlotRequest = 9,      // Request to join a specific slot
-		RequestFlagPickup = 10 // Request to pick up flag
+		RequestFlagPickup = 10, // Request to pick up flag
+		RequestFlagDrop = 11,
+		PlayerScore = 12,
+		GameWon = 13
 	}
 	
 	// Sends a flag pickup request to the server for the specified flag position.
@@ -305,26 +308,20 @@ public partial class Client : Node          // ← must inherit Node
 					UpdatePlayerState(statePlayerId, hits, isFlagHolder, score, stamina, animationState);
 					break;
 					
+				//  Client.cs  –  Packet handler
 				case PacketType.FlagUpdate:
-					int flagPlayerId = reader.ReadInt32();
+				{
+					int holderId = reader.ReadInt32();
 					bool isPickup = reader.ReadBoolean();
-					float flagX = reader.ReadSingle();
-					float flagY = reader.ReadSingle();
-					float flagZ = reader.ReadSingle();
-					
-					GD.Print($"Received FlagUpdate packet: playerId={flagPlayerId}, isPickup={isPickup}, position=({flagX}, {flagY}, {flagZ})");
-					if (isPickup)
-					{
-						// Flag was picked up by a player
-						HandleFlagPickup(flagPlayerId);
-					}
-					else
-					{
-						// Flag was dropped at position by a player
-						HandleFlagDrop(flagPlayerId, new Vector3(flagX, flagY, flagZ));
-					}
+					float fx = reader.ReadSingle();
+					float fy = reader.ReadSingle();
+					float fz = reader.ReadSingle();
+
+					CallDeferred(nameof(ApplyFlagUpdateDeferred), holderId, isPickup, new Vector3(fx, fy, fz));
 					break;
-					
+				}
+
+									
 				case PacketType.Attack:
 					int attackerId = reader.ReadInt32();
 					float attackX = reader.ReadSingle();
@@ -361,6 +358,21 @@ public partial class Client : Node          // ← must inherit Node
 					HandlePlayerLeft(leftPlayerId, remainingPlayers);
 					break;
 					
+				case PacketType.PlayerScore:
+				{
+					int scoreplayerId = reader.ReadInt32();
+					float newscore = reader.ReadSingle();
+					// Defer to NetworkManager to update HUD
+					CallDeferred(nameof(UpdatePlayerScoreDeferred), scoreplayerId, newscore);
+					break;
+				}
+				case PacketType.GameWon:
+				{
+					int winnerId = reader.ReadInt32();
+					CallDeferred(nameof(HandleGameWonDeferred), winnerId);
+					break;
+				}
+
 				default:
 					GD.Print($"Unknown packet type: {packetType}");
 					break;
@@ -934,4 +946,67 @@ public partial class Client : Node          // ← must inherit Node
 		
 		_pendingPlayerJoinedPackets.Clear();
 	}
+
+	private void HandlePlayerScore(int playerId, float score)
+	{
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		if (networkManager != null)
+		{
+			networkManager.UpdatePlayerScore(playerId, score);
+		}
+	}
+ 
+	private void HandleGameWon(int winnerId)
+	{
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server");
+		if (networkManager != null)
+		{
+			networkManager.HandleGameWon(winnerId);
+		}
+	}
+	private void UpdatePlayerScoreDeferred(int playerId, float score)
+	{
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server") ?? NetworkManager.Instance;
+		if (networkManager != null)
+			networkManager.UpdatePlayerScore(playerId, score);
+	}
+
+	private void HandleGameWonDeferred(int winnerId)
+	{
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server") ?? NetworkManager.Instance;
+		if (networkManager != null)
+			networkManager.HandleGameWon(winnerId);
+	}
+
+	private void ApplyFlagUpdateDeferred(int holderId, bool isPickup, Vector3 worldPos)
+	{
+		// 1) Let NetworkManager update holder flags & clear others
+		var networkManager = GetNodeOrNull<NetworkManager>("/root/Map/Server") ?? NetworkManager.Instance;
+		if (networkManager != null)
+		{
+			networkManager.ApplyFlagUpdate(holderId, isPickup, worldPos);
+		}
+		else
+		{
+			GD.PrintErr("NetworkManager not found to apply FlagUpdate");
+		}
+
+		// 2) Also tell the Flag node to perform its own scripted attach/drop
+		var flag = GetNodeOrNull<Node>("/root/Map/Game/Flag") ?? GetNodeOrNull<Node>("/root/Map/Flag");
+		if (flag != null)
+		{
+			// This snaps the flag and ensures its follow code runs the same on every client
+			flag.CallDeferred("apply_server_update", holderId, isPickup, worldPos);
+
+			// Debug: confirm which node we touched
+			GD.Print($"ApplyFlagUpdateDeferred → Flag node: {flag.GetPath()}  holderId={holderId} pickup={isPickup} pos={worldPos}");
+		}
+		else
+		{
+			GD.PrintErr("Flag node not found to apply server update");
+		}
+	}
+
+
+
 }

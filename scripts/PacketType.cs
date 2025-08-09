@@ -39,16 +39,24 @@ public enum PacketType : byte
 	// Client request to join a specific player slot.
 	// Sent from client to server when requesting to join the game.
 	SlotRequest = 9,
+
+	// Client → Server : request to pick up the flag (server will validate and broadcast authoritative FlagUpdate)
+	RequestFlagPickup = 10,
 	
-	// Powerup spawn events sent from server to all clients.
-	// Contains powerup type and spawn position information.
-	PowerupSpawn = 10,
+	// Client → Server : request to drop the flag at a given position
+	RequestFlagDrop   = 11,
+	
+	// Server → clients : authoritative periodic score update (playerId, score)
+	PlayerScore = 12,
+	
+	// Server → clients : match finished, contains winner playerId
+	GameWon = 13,
+
+	PowerupSpawn = 14,
 	
 	// Powerup pickup events sent from server to all clients.
-	// Contains player ID and powerup type when a player picks up a powerup.
-	PowerupPickup = 11,
+	PowerupPickup = 15,
 	
 	// General game state updates sent from server to all clients.
-	// Contains overall game state information like scores, time remaining, etc.
-	GameState = 12
+	GameState = 16
 } 

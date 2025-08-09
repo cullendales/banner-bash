@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
+using System.IO;
 
 namespace GameServer
 {
@@ -20,7 +21,10 @@ namespace GameServer
 			Attack = 7,
 			TakeHit = 8,
 			SlotRequest = 9,
-			RequestFlagPickup = 10
+			RequestFlagPickup = 10,
+			RequestFlagDrop = 11,
+			PlayerScore = 12,
+			GameWon = 13
 		}
 
 		public int id;
@@ -41,19 +45,19 @@ namespace GameServer
 			private byte[]? receiveBuffer;
 			private const int dataBufferSize = 4096;
 
-
 			public TCP(int _id)
 			{
 				id = _id;
 			}
-			// sets up connection with new client
+
 			public void Connect(TcpClient _socket)
 			{
-
 				socket = _socket;
 				socket.SendBufferSize = dataBufferSize;
-				//socket.SendBufferSize = dataBufferSize;
+				socket.ReceiveBufferSize = dataBufferSize; // fix: receive, not send twice
 
+				stream = socket.GetStream();
+				receiveBuffer = new byte[dataBufferSize];
 				stream = socket.GetStream();
 				receiveBuffer = new byte[dataBufferSize];
 
@@ -72,66 +76,60 @@ namespace GameServer
 				// Broadcast player joined to all clients
 				BroadcastPlayerJoined();
 			}
-			// send initial wecome to client
+
 			private void SendWelcome()
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)1); // Welcome packet
-					writer.Write(id); // Client ID
-
-					byte[] data = stream.ToArray();
-					SendData(data);
+					w.Write((byte)PacketType.Welcome);
+					w.Write(id);
+					SendData(ms.ToArray());
 				}
 
 				Console.WriteLine($"Sent welcome packet to client {id}");
 			}
-			// lets new client know about all clients already connected
+
 			private void SendExistingPlayers()
 			{
 				Console.WriteLine($"Sending existing players to client {id}");
 
 				foreach (var client in Server.clients.Values)
 				{
-					// Skip ourselves and disconnected clients
 					if (client.id == id || client.tcp.socket == null || !client.tcp.socket.Connected)
 						continue;
 
-					Console.WriteLine($"Sending existing player {client.id} to new client {id}");
-
-					using (MemoryStream stream = new MemoryStream())
-					using (BinaryWriter writer = new BinaryWriter(stream))
+					using (MemoryStream ms = new MemoryStream())
+					using (BinaryWriter w = new BinaryWriter(ms))
 					{
-						writer.Write((byte)5); // PlayerJoined packet
-						writer.Write(client.id);
-						writer.Write(Server.ConnectedPlayers);
-
-						byte[] data = stream.ToArray();
-						SendData(data);
+						w.Write((byte)PacketType.PlayerJoined);
+						w.Write(client.id);
+						w.Write(Server.ConnectedPlayers);
+						SendData(ms.ToArray());
 					}
 				}
 			}
-			// adds handling for disconnects and processes received data
+
 			private void ReceiveCallback(IAsyncResult _result)
 			{
 				try
 				{
 					if (stream == null || receiveBuffer == null) return;
 
+
 					int _byteLength = stream.EndRead(_result);
 					if (_byteLength <= 0)
 					{
-						// Client disconnected
 						Console.WriteLine($"Client {id} disconnected");
 						Disconnect();
 						return;
 					}
+
 					byte[] _data = new byte[_byteLength];
 					Array.Copy(receiveBuffer, _data, _byteLength);
 
-					// Handle the received packet
 					HandlePacket(_data);
+
 
 					if (stream != null && receiveBuffer != null)
 					{
@@ -149,110 +147,134 @@ namespace GameServer
 			{
 				try
 				{
-					using (MemoryStream stream = new MemoryStream(data))
-					using (BinaryReader reader = new BinaryReader(stream))
+					using (MemoryStream ms = new MemoryStream(data))
+					using (BinaryReader r = new BinaryReader(ms))
 					{
-						byte packetType = reader.ReadByte();
-						Console.WriteLine($"Received packet type {packetType} from client {id} with {data.Length} bytes");
+						byte packetType = r.ReadByte();
+						// Console.WriteLine($"[Client {id}] Packet {packetType} len={data.Length}");
 
 						switch (packetType)
 						{
-							case 1: // Welcome
-								int clientId = reader.ReadInt32();
+							case (byte)PacketType.Welcome:
+							{
+								int clientId = r.ReadInt32();
 								Console.WriteLine($"Client {id} sent welcome with ID: {clientId}");
-								Console.WriteLine($"Client {id} welcome response received successfully");
 								break;
+							}
 
-							case 9: // SlotRequest (PacketType.SlotRequest)
-								int requestedSlot = reader.ReadInt32();
+							case (byte)PacketType.SlotRequest:
+							{
+								int requestedSlot = r.ReadInt32();
 								Console.WriteLine($"Client {id} requested slot {requestedSlot} - not implemented");
 								break;
+							}
 
-							case 2: // PlayerPosition
-								float x = reader.ReadSingle();
-								float y = reader.ReadSingle();
-								float z = reader.ReadSingle();
-								float rotX = reader.ReadSingle();
-								float rotY = reader.ReadSingle();
-								float rotZ = reader.ReadSingle();
+							case (byte)PacketType.PlayerPosition:
+							{
+								float x = r.ReadSingle();
+								float y = r.ReadSingle();
+								float z = r.ReadSingle();
+								float rotX = r.ReadSingle();
+								float rotY = r.ReadSingle();
+								float rotZ = r.ReadSingle();
 
-								// Broadcast position to all other clients
 								BroadcastPlayerPosition(id, x, y, z, rotX, rotY, rotZ);
 								break;
+							}
 
-							case 3: // PlayerState
-								int hits = reader.ReadInt32();
-								bool isFlagHolder = reader.ReadBoolean();
-								float score = reader.ReadSingle();
-								float stamina = reader.ReadSingle();
-								int stringLength = reader.ReadInt32();
-								byte[] stringBytes = reader.ReadBytes(stringLength);
+							case (byte)PacketType.PlayerState:
+							{
+								int hits = r.ReadInt32();
+								bool isFlagHolder = r.ReadBoolean();
+								float clientReportedScore = r.ReadSingle(); // ignore for authority
+								float stamina = r.ReadSingle();
+								int stringLength = r.ReadInt32();
+								byte[] stringBytes = r.ReadBytes(stringLength);
 								string animationState = Encoding.UTF8.GetString(stringBytes);
 
-								Console.WriteLine($"Received PlayerState from client {id}: hits={hits}, flag={isFlagHolder}, score={score}, stamina={stamina}");
-
-								// Update server's score tracking
-								Server.UpdatePlayerScore(id, score);
-
-								// Broadcast state to all other clients
-								BroadcastPlayerState(id, hits, isFlagHolder, score, stamina, animationState);
+								// Do NOT trust/update score from client. Server is authoritative via ScoreTick().
+								// (We still rebroadcast the state so other clients can animate.)
+								BroadcastPlayerState(id, hits, isFlagHolder, clientReportedScore, stamina, animationState);
 								break;
+							}
 
-							case 4: // FlagUpdate
-								bool isPickup = reader.ReadBoolean();
-								float flagX = reader.ReadSingle();
-								float flagY = reader.ReadSingle();
-								float flagZ = reader.ReadSingle();
-
-								Console.WriteLine($"Received FlagUpdate from client {id}: isPickup={isPickup}, position=({flagX}, {flagY}, {flagZ})");
-
-								// Broadcast flag update to all clients
-								BroadcastFlagUpdate(id, isPickup, flagX, flagY, flagZ);
-								Console.WriteLine($"Broadcasted FlagUpdate to all clients");
+							case (byte)PacketType.FlagUpdate:
+							{
+								// server-only; ignore client attempts
+								Console.WriteLine($"[WARN] Client {id} sent FlagUpdate directly (ignored)");
 								break;
+							}
 
-							case 7: // Attack
-								float attackX = reader.ReadSingle();
-								float attackY = reader.ReadSingle();
-								float attackZ = reader.ReadSingle();
+							case (byte)PacketType.RequestFlagDrop:
+							{
+								float dX = r.ReadSingle();
+								float dY = r.ReadSingle();
+								float dZ = r.ReadSingle();
 
-								// Broadcast attack to all other clients
-								BroadcastAttack(id, attackX, attackY, attackZ);
-								break;
+								Console.WriteLine($"Client {id} requests drop at ({dX:F2}, {dY:F2}, {dZ:F2})");
 
-							case 8: // TakeHit
-								int targetPlayerId = reader.ReadInt32();
-
-								// Broadcast hit to all clients
-								BroadcastTakeHit(id, targetPlayerId);
-								break;
-
-							case 10: // RequestFlagPickup
+								if (Server.FlagIsHeld && Server.CurrentFlagHolderId == id)
 								{
-									float fx = reader.ReadSingle();
-									float fy = reader.ReadSingle();
-									float fz = reader.ReadSingle();
-
-									Console.WriteLine($"Client {id} is requesting to pick up the flag at ({fx}, {fy}, {fz})");
-
-									// Simple check: only allow pickup if no one currently has the flag
-									if (!Server.FlagIsHeld)
-									{
-										Server.FlagIsHeld = true;
-										Server.CurrentFlagHolderId = id;
-
-										Console.WriteLine($"Server authorizes Player {id} to take the flag");
-
-										// Broadcast pickup to all clients
-										BroadcastFlagUpdate(id, true, fx, fy, fz);
-									}
-									else
-									{
-										Console.WriteLine($"Flag is already held. Pickup denied for Player {id}");
-									}
-
-									break;
+									Server.FlagIsHeld = false;
+									Server.CurrentFlagHolderId = -1;
+									BroadcastFlagUpdate(id, false, dX, dY, dZ);
 								}
+								else
+								{
+									Console.WriteLine($"Drop ignored: server says player {id} does not hold flag");
+								}
+								break;
+							}
+
+							case (byte)PacketType.Attack:
+							{
+								float ax = r.ReadSingle();
+								float ay = r.ReadSingle();
+								float az = r.ReadSingle();
+								BroadcastAttack(id, ax, ay, az);
+								break;
+							}
+
+							case (byte)PacketType.TakeHit:
+							{
+								int targetPlayerId = r.ReadInt32();
+								Console.WriteLine($"Player {id} hit Player {targetPlayerId}");
+
+								// Broadcast damage event
+								BroadcastTakeHit(id, targetPlayerId);
+
+								// If target was holder, transfer to attacker (authoritative steal)
+								if (Server.FlagIsHeld && Server.CurrentFlagHolderId == targetPlayerId)
+								{
+									Server.CurrentFlagHolderId = id;   // attacker now holds
+									Server.FlagIsHeld = true;          // ensure ticking continues
+									// announce pickup (pos not needed while attached)
+									BroadcastFlagUpdate(id, true, 0f, 0f, 0f);
+									Console.WriteLine($"Flag stolen! Player {id} is now holder (taken from {targetPlayerId})");
+								}
+								break;
+							}
+
+							case (byte)PacketType.RequestFlagPickup:
+							{
+								float fx = r.ReadSingle();
+								float fy = r.ReadSingle();
+								float fz = r.ReadSingle();
+
+								Console.WriteLine($"Client {id} requests pickup near ({fx:F2}, {fy:F2}, {fz:F2})");
+
+								if (!Server.FlagIsHeld)
+								{
+									Server.FlagIsHeld = true;
+									Server.CurrentFlagHolderId = id;
+									BroadcastFlagUpdate(id, true, fx, fy, fz);
+								}
+								else
+								{
+									Console.WriteLine($"Pickup denied: flag already held by {Server.CurrentFlagHolderId}");
+								}
+								break;
+							}
 
 							default:
 								Console.WriteLine($"Unknown packet type: {packetType}");
@@ -267,25 +289,6 @@ namespace GameServer
 					if (data.Length > 0)
 					{
 						Console.WriteLine($"First byte: {data[0]}");
-						// Expected sizes for different packet types
-						switch (data[0])
-						{
-							case 1: // Welcome
-								Console.WriteLine("Expected size: 5 bytes (1 byte type + 4 bytes client ID)");
-								break;
-							case 2: // PlayerPosition
-								Console.WriteLine("Expected size: 25 bytes (1 byte type + 6 floats × 4 bytes each)");
-								break;
-							case 3: // PlayerState
-								Console.WriteLine("Expected size: variable (1 byte type + 4 bytes hits + 1 byte flag + 4 bytes score + 4 bytes stamina + 4 bytes string length + string data)");
-								break;
-							case 4: // FlagUpdate
-								Console.WriteLine("Expected size: 18 bytes (1 byte type + 1 byte pickup + 3 floats × 4 bytes each)");
-								break;
-							case 7: // Attack
-								Console.WriteLine("Expected size: 13 bytes (1 byte type + 3 floats × 4 bytes each)");
-								break;
-						}
 					}
 				}
 			}
@@ -302,10 +305,7 @@ namespace GameServer
 			{
 				try
 				{
-					if (stream != null)
-					{
-						stream.EndWrite(ar);
-					}
+					stream?.EndWrite(ar);
 				}
 				catch (Exception ex)
 				{
@@ -313,90 +313,73 @@ namespace GameServer
 				}
 			}
 
-			// Broadcasting methods
+			// ==== Broadcast helpers (server -> clients) ====
+
 			private void BroadcastPlayerPosition(int playerId, float x, float y, float z, float rotX, float rotY, float rotZ)
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)2); // PlayerPosition
-					writer.Write(playerId);
-					writer.Write(x);
-					writer.Write(y);
-					writer.Write(z);
-					writer.Write(rotX);
-					writer.Write(rotY);
-					writer.Write(rotZ);
-
-					byte[] data = stream.ToArray();
-					BroadcastToAll(data, playerId);
+					w.Write((byte)PacketType.PlayerPosition);
+					w.Write(playerId);
+					w.Write(x); w.Write(y); w.Write(z);
+					w.Write(rotX); w.Write(rotY); w.Write(rotZ);
+					BroadcastToAll(ms.ToArray(), playerId);
 				}
 			}
 
 			private void BroadcastPlayerState(int playerId, int hits, bool isFlagHolder, float score, float stamina, string animationState)
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)3); // PlayerState
-					writer.Write(playerId);
-					writer.Write(hits);
-					writer.Write(isFlagHolder);
-					writer.Write(score);
-					writer.Write(stamina);
-					byte[] stringBytes = Encoding.UTF8.GetBytes(animationState);
-					writer.Write(stringBytes.Length);
-					writer.Write(stringBytes);
-
-					byte[] data = stream.ToArray();
-					BroadcastToAll(data, playerId);
+					w.Write((byte)PacketType.PlayerState);
+					w.Write(playerId);
+					w.Write(hits);
+					w.Write(isFlagHolder);
+					w.Write(score);
+					w.Write(stamina);
+					byte[] str = Encoding.UTF8.GetBytes(animationState);
+					w.Write(str.Length);
+					w.Write(str);
+					BroadcastToAll(ms.ToArray(), playerId);
 				}
 			}
 			// updates all other clients of current player state
 			private void BroadcastFlagUpdate(int playerId, bool isPickup, float x, float y, float z)
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)4); // FlagUpdate
-					writer.Write(playerId);
-					writer.Write(isPickup);
-					writer.Write(x);
-					writer.Write(y);
-					writer.Write(z);
-
-					byte[] data = stream.ToArray();
-					BroadcastToAll(data);
+					w.Write((byte)PacketType.FlagUpdate);
+					w.Write(playerId);   // authoritative holder (on pickup) or dropper (on drop)
+					w.Write(isPickup);
+					w.Write(x); w.Write(y); w.Write(z);
+					BroadcastToAll(ms.ToArray());
 				}
 			}
 			// sends attack state to all other clients
 			private void BroadcastAttack(int attackerId, float x, float y, float z)
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)7); // Attack
-					writer.Write(attackerId);
-					writer.Write(x);
-					writer.Write(y);
-					writer.Write(z);
-
-					byte[] data = stream.ToArray();
-					BroadcastToAll(data, attackerId);
+					w.Write((byte)PacketType.Attack);
+					w.Write(attackerId);
+					w.Write(x); w.Write(y); w.Write(z);
+					BroadcastToAll(ms.ToArray(), attackerId);
 				}
 			}
 			// broadcasts hits received
 			private void BroadcastTakeHit(int attackerId, int targetPlayerId)
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)8); // TakeHit
-					writer.Write(targetPlayerId);
-					writer.Write(1); // damage
-
-					byte[] data = stream.ToArray();
-					BroadcastToAll(data);
+					w.Write((byte)PacketType.TakeHit);
+					w.Write(targetPlayerId);
+					w.Write(1); // damage
+					BroadcastToAll(ms.ToArray());
 				}
 			}
 			// broadcasts data to all other clients
@@ -404,42 +387,47 @@ namespace GameServer
 			{
 				foreach (var client in Server.clients.Values)
 				{
-					if (client.id != excludeId && client.tcp.socket != null && client.tcp.socket.Connected)
+					if (client.id != excludeId && client.tcp.socket?.Connected == true)
 					{
 						client.tcp.SendData(data);
 					}
 				}
 			}
-			// lets other players know another player has joined
+
 			private void BroadcastPlayerJoined()
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)5); // PlayerJoined
-					writer.Write(id);
-					writer.Write(Server.ConnectedPlayers);
-
-					byte[] data = stream.ToArray();
-					BroadcastToAll(data, id); // Exclude the current client from the broadcast
+					w.Write((byte)PacketType.PlayerJoined);
+					w.Write(id);
+					w.Write(Server.ConnectedPlayers);
+					BroadcastToAll(ms.ToArray(), id);
 				}
 			}
-			// disconnects player and alerts other clients playing the game
+
 			public void Disconnect()
 			{
 				if (socket != null && socket.Connected)
 				{
+					// If this player was the holder, clear server flag state (and optionally broadcast a drop)
+					if (Server.FlagIsHeld && Server.CurrentFlagHolderId == id)
+					{
+						Server.FlagIsHeld = false;
+						Server.CurrentFlagHolderId = -1;
+						// Optional: broadcast a drop at (0,0,0) or last known pos if you track it
+						BroadcastFlagUpdate(id, false, 0f, 0f, 0f);
+					}
+
 					Server.ConnectedPlayers--;
 					Console.WriteLine($"Player {id} disconnected. Total players: {Server.ConnectedPlayers}");
 
-					// Remove player's score
 					Server.RemovePlayerScore(id);
-
-					// Broadcast player left
 					BroadcastPlayerLeft();
 
+
 					socket.Close();
-					socket = null; // Set socket to null so the slot can be reused
+					socket = null;
 					Console.WriteLine($"Socket for player {id} set to null");
 				}
 				else
@@ -447,18 +435,16 @@ namespace GameServer
 					Console.WriteLine($"Player {id} disconnect called but socket was null or not connected");
 				}
 			}
-			// lets other players know about a disconnection
+
 			private void BroadcastPlayerLeft()
 			{
-				using (MemoryStream stream = new MemoryStream())
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				using (MemoryStream ms = new MemoryStream())
+				using (BinaryWriter w = new BinaryWriter(ms))
 				{
-					writer.Write((byte)6); // PlayerLeft
-					writer.Write(id);
-					writer.Write(Server.ConnectedPlayers);
-
-					byte[] data = stream.ToArray();
-					BroadcastToAll(data, id);
+					w.Write((byte)PacketType.PlayerLeft);
+					w.Write(id);
+					w.Write(Server.ConnectedPlayers);
+					BroadcastToAll(ms.ToArray(), id);
 				}
 			}
 		}
