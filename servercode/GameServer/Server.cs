@@ -17,7 +17,7 @@ namespace GameServer
 
 		private static TcpListener? tcpListener;
 
-
+		// starts the game server based on port from above and max players
 		public static void Start(int _maxPlayer, int _port)
 		{
 			MaxPlayers = _maxPlayer;
@@ -32,7 +32,7 @@ namespace GameServer
 
 			Console.WriteLine($"Server started on port {Port}.");
 		}
-
+		// occurs when new player attempts to connect to the game and accepts new client then listens for more
 		private static void TCPConnectCallback(IAsyncResult _result)
 		{
 			if (tcpListener == null) return;
@@ -67,7 +67,7 @@ namespace GameServer
 
 			Console.WriteLine($"{_client.Client?.RemoteEndPoint} failed to connect: server full.");
 		}
-
+		// creates slots for new clients and assigns them an id
 		private static void InitializeServerData()
 		{
 			for (int i = 1; i <= MaxPlayers; i++)
@@ -75,13 +75,13 @@ namespace GameServer
 				clients.Add(i, new Client(i));
 			}
 		}
-
+		// updates score for each player id then displays all those scores for every player
 		public static void UpdatePlayerScore(int playerId, float score)
 		{
 			playerScores[playerId] = score;
 			DisplayAllScores();
 		}
-
+		// displays all players current scores
 		public static void DisplayAllScores()
 		{
 			Console.WriteLine("\n=== PLAYER SCORES ===");
@@ -94,7 +94,7 @@ namespace GameServer
 			}
 			Console.WriteLine("====================\n");
 		}
-
+		// method to remove a player score - used when they disconnect
 		public static void RemovePlayerScore(int playerId)
 		{
 			if (playerScores.ContainsKey(playerId))
