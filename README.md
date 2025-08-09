@@ -38,7 +38,7 @@ Be sure to download the .net version.
 2. Shift + Move - Sprint (hold Shift while moving).
 3. C - Crouch.
 4. G - Drop your flag.
-5. Left Click - Push nearby players; 3 pushes make them drop their flag.
+5. Left Click - Push nearby players; 1 hit make them drop their flag.
 
 ## Notes
 
