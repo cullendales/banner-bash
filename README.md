@@ -33,11 +33,11 @@ Be sure to download the .net version.
 7. The game will begin. Have fun!
 
 ## Controls
-W / A / S / D - Move around.
-Shift + Move - Sprint (hold Shift while moving).
-C - Crouch.
-G - Drop your flag.
-Left Click - Push nearby players; 3 pushes make them drop their flag.
+1. W / A / S / D - Move around.
+2. Shift + Move - Sprint (hold Shift while moving).
+3. C - Crouch.
+4. G - Drop your flag.
+5. Left Click - Push nearby players; 3 pushes make them drop their flag.
 
 ## Notes
 
