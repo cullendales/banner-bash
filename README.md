@@ -2,6 +2,7 @@
 <img width="867" height="515" alt="Screenshot 2025-08-09 at 8 52 24 AM" src="https://github.com/user-attachments/assets/a1d5ed16-acdb-4ee4-911f-715dd7894746" />
 
 ## About
+[Demo Video](https://www.youtube.com/watch?v=FlR06ECRRqo)
 
 Banner Bash is an online game developed in Godot using a combination of GDScript and C#. The primary objective of the game is to capture a flag object before your opponents and hold it for as long as possible. The player holding the flag will gain points over time and the player with the most points when a round ends wins the game. When a player has the flag they are not safe from the other players and must run, as the other players can hit them to make them drop the flag and then pick it up themselves. Multiplayer players will compete online to obtain a singular flag.
 
